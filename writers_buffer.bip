@@ -1,0 +1,83 @@
+@cpp(include="stdio.h")
+package writers_buffer
+  extern function printf(string, int)
+
+  port type OutPort(const int v)
+  port type InPort(int v)
+
+  connector type Send(OutPort out, InPort in)
+    define out in
+    on out in
+      down { in.v = out.v; }
+  end
+
+  atom type Writer(int PERIOD, int MAX)
+    data int i
+    clock x unit second
+
+    export port OutPort write(i)
+  
+    place WRITE
+
+    initial to WRITE
+      do {
+        i = 0;
+      }
+
+    on write from WRITE to WRITE
+      provided (i*PERIOD < x && x <= (i + 1)*PERIOD && i < MAX)
+      do {
+        i = i + 1;
+      }
+
+    invariant inv at WRITE provided (x <= (i + 1)*PERIOD)
+  end
+
+  atom type Buffer()
+    data int v
+    data bool fresh = false
+
+    export port OutPort read(v)
+    export port InPort write(v)
+
+    place READY
+
+    initial to READY
+
+    on write from READY to READY
+      do { fresh = true; }
+      resume
+
+    on read from READY to READY
+      provided (fresh)
+      eager
+      do { fresh = false; }
+  end
+
+  atom type Display()
+    data int v
+
+    export port InPort read(v)
+
+    place DISPLAY
+
+    initial to DISPLAY
+
+    on read from DISPLAY to DISPLAY
+      do { printf("New value: %d\n", v); }
+  end
+
+  compound type Compound()
+    component Writer W1(1, 10), W2(2, 5)
+    component Buffer B()
+    component Display D()
+
+    connector Send S1(W1.write, B.write)
+    connector Send S2(W2.write, B.write)
+    connector Send S(B.read, D.read)
+
+    priority WR1 S:* < S1:*
+    priority WR2 S:* < S2:*
+    priority W12 S1:* < S2:*
+  end
+end

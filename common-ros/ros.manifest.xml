@@ -1,0 +1,39 @@
+<'
+lang c
+
+# check arguments
+if {[llength $argv] != 1} { error "expected arguments: types" }
+lassign $argv types
+
+# compute handy shortcuts
+set component [dotgen component]
+set comp [$component name]
+
+if {[catch {$component doc} brief]} {
+  set brief $comp
+}
+'>
+<package>
+  <description brief="<"$brief">" >
+    <"$brief">
+  </description>
+<'if {![catch {dotgen input notice} notice]} {'>
+  <license><"[string map {
+  \" &quot; ' &apos;
+  < &lt; > &gt;
+  & &amp;
+} $notice]"></license>
+<'}'>
+<'if {![catch {$component email} email]} {'>
+  <author><"$email"></author>
+<'}'>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="actionlib"/>
+  <depend package="actionlib_msgs"/>
+<'foreach t $types {'>
+<'  if {![catch {$t masquerade ros} masquerade]} {'>
+  <depend package="<"[lindex [split $masquerade /] 0]">"/>
+<'  }'>
+<'}'>
+</package>

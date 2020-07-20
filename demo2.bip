@@ -1,0 +1,222 @@
+package demo2
+
+port type Port()
+
+connector type sync(Port p1, Port p2)
+	define p1 p2
+end
+
+connector type sync2(Port p1, Port p2, Port p3)
+	define p1 p2 p3
+end
+
+connector type sync3(Port p1, Port p2, Port p3, Port p4, Port p5)
+	define p1 p2 p3 p4 p5
+end
+
+atom type Client()
+	export port Port reqmd()
+	export port Port reqgp()
+	export port Port reqmon()
+	export port Port finished()
+
+
+	place idle, waiting
+
+	initial to idle
+
+	on reqmd
+	from idle to waiting
+	
+	on reqgp
+	from idle to waiting
+
+	on reqmon
+	from idle to waiting
+
+	on finished
+	from waiting to idle
+	
+end
+
+atom type Control()
+	clock c
+	export port Port reqmd()
+	export port Port reqgp()
+	export port Port reqmon()
+	export port Port intermd()
+	export port Port intergp()
+	export port Port clear()
+	export port Port launch()
+	export port Port finished()
+	export port Port activate()	
+
+	port Port intern()
+
+	place idle, managemd, managegp, free, release 
+	
+	initial to idle
+
+	on reqmd
+	from idle to managemd
+	reset c
+
+	on reqgp
+	from idle to managegp
+	reset c
+
+	on reqmon
+	from idle to free
+	reset c
+
+	on intermd 
+	from managemd to managemd
+	when (c==0)
+
+	on activate
+	from managemd to free
+	when (c==0)
+
+	on intergp 
+	from managegp to managegp
+	when (c==0)
+
+	on activate
+	from managegp to free
+	when (c==0)
+
+	on clear
+	from free to free
+	when (c==0)
+
+	on intern
+	from free to release
+	when (c==0)
+
+	on launch
+	from release to release
+	when (c==0)
+
+	on finished
+	from release to idle
+	when (c==0)
+
+
+end
+
+
+atom type status()
+        export port Port activ()
+        export port Port launch()
+        export port Port hold()
+        export port Port interrupt()
+        export port Port clear()
+        export port Port void()
+        export port Port run()
+        export port Port inter()
+        export port Port finished()
+	export port Port nointer()
+
+place idle, activate, start, running, stopp, ether
+
+        initial to idle
+
+        on activ
+        from idle to activate
+
+	on nointer
+	from idle to running
+
+        on hold
+        from activate to start
+
+        on launch
+        from start to running
+
+        on interrupt
+        from running to stopp
+
+        on interrupt
+        from start to ether
+
+        on clear
+        from ether to idle
+
+        on void
+        from idle to idle
+
+        on inter
+        from stopp to stopp
+
+        on finished
+        from stopp to ether
+
+        on finished
+        from running to ether
+
+end
+
+compound type demo2()
+	
+	component Client client()
+	component Control control()
+	component status md0(), md1(), gp0(), gp1(), mon0(), mon1()
+
+	connector sync interrmd(control.intermd, md0.interrupt)
+	connector sync interrmd2(control.intermd, md1.interrupt)
+	connector sync interrmd3(control.intermd, gp0.interrupt)
+	connector sync interrmd4(control.intermd, gp1.interrupt)
+
+	connector sync interrgp(control.intergp, md0.interrupt)
+	connector sync interrgp2(control.intergp, md1.interrupt)
+	connector sync interrgp3(control.intergp, gp0.interrupt)
+	connector sync interrgp4(control.intergp, gp1.interrupt)
+
+	connector sync finishreq(control.finished, client.finished)
+
+	connector sync startmd(control.activate, md0.hold)
+	connector sync startmd2(control.activate, md1.hold)
+
+	connector sync startgp(control.activate, gp0.hold)
+	connector sync startgp2(control.activate, gp1.hold)
+
+
+	connector sync2 requestmd(control.reqmd, client.reqmd, md0.activ)
+	connector sync2 requestmd2(control.reqmd, client.reqmd, md1.activ)
+
+	connector sync2 requestgp(control.reqgp, client.reqgp, gp0.activ)
+	connector sync2 requestgp2(control.reqgp, client.reqgp, gp1.activ)
+
+	connector sync2 requestmon(control.reqmon, client.reqmon, mon0.nointer)
+	connector sync2 requestmon2(control.reqmon, client.reqmon, mon1.nointer)
+
+	connector sync3 launchmd(control.launch, md0.launch, md1.void, gp0.void, gp1.void)
+	connector sync3 launchmd2(control.launch, md1.launch, md0.void, gp0.void, gp1.void)
+	connector sync3 launchgp(control.launch, gp0.launch, md1.void, md0.void, gp1.void)
+	connector sync3 launchgp2(control.launch, gp1.launch, md1.void, gp0.void, md0.void)
+
+	priority launchfirst finishreq:*<launchmd:*
+	priority launchfirst2 finishreq:*<launchmd2:*
+	priority launchfirst3 finishreq:*<launchgp:*
+	priority launchfirst4 finishreq:*<launchgp2:*
+
+	priority interruptfirst startmd:*<interrmd2:*
+	priority interruptfirst2 startmd:*<interrmd3:*
+	priority interruptfirst3 startmd:*<interrmd4:*
+
+	priority interruptfirst4 startmd2:*<interrmd:*
+	priority interruptfirst5 startmd2:*<interrmd3:*
+	priority interruptfirst6 startmd2:*<interrmd4:*
+
+	priority interruptfirst7 startgp:*<interrgp2:*
+	priority interruptfirst8 startgp:*<interrgp3:*
+	priority interruptfirst9 startgp:*<interrgp4:*
+
+	priority interruptfirst10 startgp2:*<interrgp:*
+	priority interruptfirst11 startgp2:*<interrgp3:*
+	priority interruptfirst12 startgp2:*<interrgp4:*
+
+	
+end
+end
+

@@ -1,0 +1,1801 @@
+
+<'
+# Copyright (c) 2012-2015 LAAS/CNRS
+# All rights reserved.
+#
+# Redistribution and use  in source  and binary  forms,  with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#   1. Redistributions of  source  code must retain the  above copyright
+#      notice and this list of conditions.
+#   2. Redistributions in binary form must reproduce the above copyright
+#      notice and  this list of  conditions in the  documentation and/or
+#      other materials provided with the distribution.
+#
+#
+
+
+if {[llength $argv] != 1} { error "expected arguments: slowdown" }
+lassign $argv slowdown
+
+# compute handy shortcuts
+
+lang c'>
+
+/* This model is automatically generated - Mohammed Foughali 2016 */
+
+@cpp(include="<'
+foreach c [dotgen components] {set comp [$c name]'><"$comp">_BIPGenoM3.hpp,<'}'>stdio.h",src="<'
+foreach c [dotgen components] {set comp [$c name]'>external/<"$comp">_BIPGenoM3.cpp<'
+if {$c != [lindex [dotgen components] end]} {'>,<'}}'>")
+
+/* package */
+package BIPEBIPGenoM3
+
+/* definition of external types */
+extern data type genom_event
+
+<'foreach component [dotgen components] {
+    set comp [$component name]'>
+extern data type genom_<"$comp">_component_data
+extern data type genom_<"$comp">_activity_ptr
+<'foreach s [$component services] {'>
+extern data type genom_activity_<"$comp">_<"[$s name]">_ptr
+<'}}'>
+
+/* definition of external functions */
+extern function printf(string)	
+
+<'    foreach e [dotgen types] {'>
+<'	if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
+extern function bool BIP_<"[$e cname]">_p(const genom_event)
+<'	}
+    }'>
+
+extern function bool BIP_genom_ok_p(const genom_event)
+
+<'foreach component [dotgen components] {
+    set comp [$component name]'>
+extern function BIP_<"$comp">_send_ir(const int)
+extern function genom_<"$comp">_component_data BIP_<"$comp">_receive_rqst(genom_<"$comp">_component_data)
+extern function BIP_<"$comp">_init_genom()
+extern function BIP_<"$comp">_init_mbox()
+
+<'    foreach s [$component services] {'>
+<'	if {![catch {$s validate}]} {'>
+extern function genom_event  BIP_<"$comp">_<"[$s name]">_validate(const int)
+<'	}'>
+extern function BIP_<"$comp">_<"[$s name]">_rqst_report(int)
+<'	if {[$s kind] != "activity"} {'>
+extern function genom_event  BIP_<"$comp">_<"[$s name]">_control(const int)
+<'	} else {'>
+extern function BIP_<"$comp">_<"[$s name]">_activity_report(genom_activity_<"$comp">_<"[$s name]">_ptr)
+extern function genom_activity_<"$comp">_<"[$s name]">_ptr BIP_cast_activity_in_<"$comp">_<"[$s name]">_activity(int)
+<'	}'>
+
+//extern function genom_<"$comp">_activity_ptr BIP_cast_<"$comp">_<"[$s name]">_activity_inactivity(genom_activity_<"$comp">_<"[$s name]">)
+<'set COMP [string toupper $comp]'>
+
+extern function bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const int)
+
+<'    }'>
+<'    foreach t [$component tasks] {'>
+extern function genom_<"$comp">_activity_ptr BIP_<"$comp">_<"[$t name]">_permanent_activity()
+
+<'	foreach state [$t fsm] {
+	    set func [$t class]_[$t name]_[$state name]'>
+extern function genom_event BIP_<"$comp">_codel_<"$func">(genom_<"$comp">_activity_ptr)
+<'	}'>
+
+<'	foreach obj [$t services] {
+	    foreach state [$obj fsm] {
+		set func [$obj class]_[$obj name]_[$state name]'>
+extern function genom_event BIP_<"$comp">_codel_<"$func">(genom_activity_<"$comp">_<"[$obj name]">_ptr)
+<'	    }
+	}
+    }
+}'>
+
+/* definition of port types */
+port type Port()
+
+<'foreach component [dotgen components] {
+    set comp [$component name]'>
+port type <"$comp">GenoM3Port(int activity)
+<'}'>
+
+/* definition of connector types types */
+<'
+set max 2
+set synclengths {2 3 4}
+set triglengths {2 3}
+
+foreach component [dotgen components] {
+    set instpertask [list]
+    set interperservice [list]
+    set lockspercodel [list]
+    set requests [list]
+    set activities [list]
+    set nonactivities [list]
+    
+    foreach t [$component tasks] {
+	lappend instpertask [expr [llength [$t services]]*$max]}
+
+    foreach s [$component services] {
+	if {[$s name]!="abort_activity" && [$s name]!="connect_service"} {
+	    lappend requests $s
+	    if {[$s kind] == "activity"} {lappend activities $s
+	    } else {lappend nonactivities $s}
+	    if {$s in [$s interrupts]} {lappend interperservice [expr [llength [$s interrupts]]*$max-1]
+	    } else {lappend interperservice [expr [llength [$s interrupts]]*$max]}
+	    foreach c [$s validate] {
+		if {[llength [$c mutex]]} {
+		    lappend lockspercodel [llength [$c mutex]]}}
+	    foreach c [$s codels] {
+		if {[llength [$c mutex]]} {
+		    lappend lockspercodel [llength [$c mutex]]}}
+	    if {[$s kind]!="activity"} {
+		set temp [llength [$s mutex]]
+		foreach c [$s codels] {
+			incr temp [llength [$s mutex]]}
+		if {$temp} {
+		    lappend lockspercodel [llength [$s mutex]]}}
+	}
+    }
+    
+    foreach t [$component tasks] {
+	foreach c [$t codels] {
+	    if {[llength [$c mutex]]} {lappend lockspercodel [llength [$c mutex]]}}}
+
+    foreach i $instpertask {
+	set test 0
+	foreach sync $synclengths {
+	    if {[expr $i+1]==$sync} {set test 1
+		break}}
+	if {!$test} {lappend synclengths [expr $i+1]}}
+
+    foreach p $interperservice {
+	set test 0
+	foreach sync $synclengths {
+	    if {[expr $p+2]==$sync} {set test 1
+		break}}
+	if {!$test} {lappend synclengths [expr $p+2]}}
+
+    foreach l $lockspercodel {
+	set test 0
+	foreach sync $synclengths {
+	    if {[expr $l+2]==$sync} {set test 1
+		break}}
+	if {!$test} {lappend synclengths [expr $l+2]}}
+    
+    set allinst 0
+    foreach i $instpertask {
+	set allinst [expr $allinst+$i]}
+    
+    foreach p $interperservice {
+	set test 0
+	if {[expr $p%$max]} {incr p}
+	foreach trig $triglengths {
+	    if {[expr $p+1]==$trig || $p==0} {set test 1
+		break}}
+	if {!$test} {lappend triglengths [expr $p+1]}}
+
+    set test 0
+
+    foreach trig $triglengths {
+	if {[expr $allinst+1]==$trig} {set test 1
+	    break}}
+    if {!$test} {lappend triglengths [expr $allinst+1]
+    }
+}'>
+
+/* synchrones */
+connector type singleton (Port p1)
+	define p1
+end
+
+connector type singleton_exp (Port p1)
+	export port Port exp()
+	define p1
+end
+
+<'foreach component [dotgen components] {
+    set comp [$component name]'>
+connector type singleton_with_data_<"$comp"> (<"$comp">GenoM3Port p1)
+	define p1
+end
+	
+connector type sync2_with_data_<"$comp"> (<"$comp">GenoM3Port p1, <"$comp">GenoM3Port p2)
+	data int temp
+	export port <"$comp">GenoM3Port temporary(temp)
+	define p1 p2
+	on p1 p2 
+	up { temp = p1.activity; } down { p2.activity = temp; }
+end
+	
+connector type sync3_with_data_<"$comp"> (<"$comp">GenoM3Port p1, Port p2, <"$comp">GenoM3Port p3)
+	data int temp
+	export port <"$comp">GenoM3Port temporary(temp)
+	define p1 p2 p3
+	on p1 p2 p3 
+	up { temp = p1.activity; } down { p3.activity = temp; }
+end
+
+<'}
+
+foreach sync $synclengths {'>
+connector type sync<"$sync">(<'for {set k 1} {$k <= $sync} {incr k} {'>Port p<"$k"><'if {$k < $sync} {'>, <'}}'>)
+    define <'for {set k 1} {$k <= $sync} {incr k} {'>p<"$k"> <'}'>
+
+end
+
+<'}
+
+foreach sync $synclengths {'><"\n">connector type sync<"$sync">_exp(<'
+    for {set k 1} {$k <= $sync} {incr k} {'>Port p<"$k"><'
+	if {$k < $sync} {'>, <'}}'>)<"\n">export port Port exp()<"\n">define <'
+    for {set k 1} {$k <= $sync} {incr k} {'>p<"$k"> <'}'><"\n">end<"\n\n"><'}'>/* triggers */<"\n"><'
+
+
+foreach trig $triglengths {'><"\n">connector type trig<"$trig">(<'
+    for {set k 1} {$k <= $trig} {incr k} {'>Port p<"$k"><'
+	if {$k < $trig} {'>, <'}}'>)<"\n">define <'
+    for {set k 1} {$k <= $trig} {incr k} {'>p<"$k"><'
+if {$k == 1} {'>'<'}'> <'}'><"\n">end<"\n\n"><'}'>
+
+/* definition of atoms */
+
+/* global types */
+
+/* mutual exclusion */
+atom type LOCK()
+	export port Port take()
+	export port Port give()
+	export port Port check()
+
+	place free, taken
+
+	initial to free
+
+	on check
+	from free to free
+
+	on take
+	from free to taken
+
+	on give
+	from taken to free
+end
+
+
+/* manage activities termination */
+
+atom type SIGNAL()
+
+	clock c unit microsecond
+	export port Port sig()
+	export port Port endsig()
+	export port Port hold()
+
+	place start, intermediate, notify
+
+	initial to start
+
+	on sig
+	from start to intermediate
+	resume
+
+	on sig
+	from intermediate to intermediate
+	resume
+
+	on hold
+	from intermediate to notify
+	resume
+
+	on sig
+	from notify to notify
+	resume
+
+	on endsig
+	from notify to start
+	resume
+end
+
+/* activities status */
+
+atom type STATUS()
+    export port Port activ()
+    export port Port deactiv()
+    export port Port launch()
+    export port Port hold()
+    export port Port interrupt()
+    export port Port clear()
+    export port Port void()
+    export port Port run()
+    export port Port inter()
+    export port Port finished()
+
+place idle, activate, start, running, stopp, ether
+
+	initial to idle
+
+	on activ
+	from idle to activate
+
+	on deactiv
+	from activate to idle
+
+	on hold
+	from activate to start
+
+	on launch
+	from start to running
+
+	on interrupt
+	from running to stopp
+
+	on interrupt
+	from start to ether
+
+	on clear
+	from ether to idle
+
+	on void
+	from idle to idle
+
+	on void
+	from ether to ether
+
+	on void
+	from activate to activate
+
+	on void
+	from start to start
+
+	on inter
+	from stopp to stopp
+
+	on finished
+	from stopp to ether
+
+	on finished
+	from running to ether
+
+	on run
+	from running to running
+
+end
+<'
+set gcounter 0
+foreach component [dotgen component] {
+    set comp [$component name]
+    set requests [list]
+    set activities [list]
+    set nonactivities [list]
+    foreach s [$component services] {
+	if {[$s name]!="abort_activity" && [$s name]!="connect_service"} {
+	    lappend requests $s
+	    if {[$s kind] == "activity"} {lappend activities $s
+	    } else {lappend nonactivities $s}
+	    
+	}
+    }'>
+	
+/* component <"$comp"> types */
+
+atom type INIT_<"$comp">()
+	clock c unit microsecond
+	port Port initialize()
+	export port Port ended()
+	
+	place begin, finish
+	
+	initial to begin
+//	do {BIP_<"$comp">_init_genom();}
+//	resume
+	
+	on initialize
+	from begin to finish
+	//eager
+	//resume
+	
+	on ended
+	from finish to finish
+
+end
+
+/* message box */
+
+atom type MAILBOX_<"$comp">()
+
+	data int activity
+	data int activity_received
+	clock c unit microsecond
+	extern port <"$comp">GenoM3Port check_mbox(activity) as "<"$comp">BIPExternalPort" remember
+	export port <"$comp">GenoM3Port mbox_event(activity_received)
+	
+	place empty, full
+	
+	initial to empty
+	resume
+	
+	on check_mbox
+	from empty to full
+	provided (c >= 0)
+	//eager
+	do { activity_received = activity; }
+	//resume
+	
+	on mbox_event
+	from full to empty
+	//eager
+	//resume
+	
+end 
+
+/* control task */
+
+atom type CONTROL_<"$comp">()
+
+	data genom_event validate_value
+	data int activity_default
+	data int activity_received
+	clock c unit microsecond
+	port Port assign()
+	export port Port too_many_activities()
+	export port Port no_more_replies()
+	export port <"$comp">GenoM3Port check_mbox(activity_default)
+	export port Port spawn()
+	export port Port norequest()
+	export port Port immediate()
+	export port Port clear()
+	export port Port launch()
+	export port Port finished()
+<'    set counter 0
+
+    foreach r $requests {'>
+<'
+	if {[$r kind]=="activity"} {'>
+	
+	export port <"$comp">GenoM3Port req_<"[$r name]">(activity_received)
+	export port Port req_<"[$r name]">_()
+	export port Port act_<"[$r name]">()
+<'	} else {'>
+	export port Port req_<"[$r name]">()
+<'	    set mut($counter) 0
+	    foreach c [$r codels] {
+		if {[llength [$c mutex]]} {
+		    set mut($counter) 1
+		    break}}
+	    if {[llength [$r mutex]] || $mut($counter)} {'>
+	export port Port lock_res_<"[$r name]">()
+        export port Port unlock_res_<"[$r name]">()<'
+	    } else {'>
+
+	port Port exec_<"[$r name]">()
+<'	    }}
+	if {[llength [$r validate]]} {'>
+	port Port valid_<"[$r name]">()
+<'      if {[$r kind]=="activity"} {'>
+        export<'}'> port Port invalid_<"[$r name]">()
+<'	    
+	if {[llength [[$r validate] mutex]]} {'>
+	export port Port lock_res_<"[$r name]">_validate()
+	export port Port unlock_res_<"[$r name]">_validate()
+<'	} else {'>
+	port Port <"[$r name]">_exe_validate()
+<'	}}
+	if {[llength [$r interrupts]]} {'>
+	export port Port inter_<"[$r name]">()
+<'	}
+	incr counter}'>
+	
+	place unspawned, idle, receive, identify, hang, ready, 
+<'    set counter 0
+    foreach r $requests {
+	if {[$r kind]=="activity"} {'><"[$r name]">_, <'
+	    if {[llength [$r interrupts]]} {'><"[$r name]">_interrupt, <'} 
+	} else {'><"[$r name]">_, <'
+	    if {[llength [$r mutex]] || $mut($counter)} {'> <"[$r name]">_2, <'}
+	    if {[llength [$r interrupts]]} {'><"[$r name]">_interrupt, <'}}
+	if {[llength [$r validate]]} {'><"[$r name]">_validate, <"[$r name]">_validate_2, <'
+	    if {[llength [[$r validate] mutex]]} {'><"[$r name]">_validate_3, <'}}
+	incr counter}'>free, release
+	
+	initial to unspawned
+	
+	on spawn
+	from unspawned to idle
+	//eager
+	//resume
+	
+	on check_mbox
+	from idle to receive
+	//eager
+	//resume
+	
+	on assign
+	from receive to identify
+	//eager
+	do { activity_received = activity_default; }
+	//resume
+
+	on too_many_activities
+	from identify to idle
+	//eager
+	do {/*report too many activities*/}
+	//resume
+
+	on immediate
+	from idle to ready
+	//eager
+	//resume
+	
+	on norequest
+	from ready to free
+	//eager
+	//resume
+	
+	on check_mbox
+	from ready to receive
+	//eager
+	//resume
+	
+<'set COMP [string toupper $comp]
+set counter 0
+foreach r $requests {
+if {[$r kind]!="activity"} {'>
+	on req_<"[$r name]">
+	from identify to <"[$r name]">_<'
+	    if {[llength [$r validate]]} {'>validate<'}'>
+
+	provided (BIP_<"$COMP">_<"[$r name]">_RQSTID_p(activity_received))
+	//eager
+	do {c = 0;}
+	//resume
+
+<'} else {'>
+
+	on req_<"[$r name]">
+	from identify to hang
+	provided (BIP_<"$COMP">_<"[$r name]">_RQSTID_p(activity_received))
+	//eager
+	//resume
+
+	on req_<"[$r name]">_
+	from hang to <"[$r name]">_<'
+	if {[llength [$r validate]]} {'>validate<'}'>
+	//eager
+	do {c = 0;}
+	//resume
+
+<'	}	
+	
+	if {[llength [$r validate]]} {
+	    if {[llength [[$r validate] mutex]]} {'>
+	on lock_res_<"[$r name]">_validate
+	from <"[$r name]">_validate to <"[$r name]">_validate_2
+	//eager
+	do {c = 0;}
+	//resume
+	
+	on unlock_res_<"[$r name]">_validate
+	from <"[$r name]">_validate_2 to <"[$r name]">_validate_3
+	//eager
+	do { validate_value = BIP_<"$comp">_<"[$r name]">_validate(activity_received); }
+	resume
+
+<'		if {![catch {[$r validate] wcet}]} {'> (c <= <"[expr [[[$r validate] wcet] value]*$slowdown*1000000]">)<'}'>
+	
+	on valid_<"[$r name]">
+	from <"[$r name]">_validate_3 to <"[$r name]">_
+	provided (BIP_genom_ok_p(validate_value))
+	//eager
+	//resume
+	
+	on invalid_<"[$r name]">
+	from <"[$r name]">_validate_3 to free
+	provided (!BIP_genom_ok_p(validate_value))
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_rqst_report(activity_received); }
+	//resume
+
+<'	    } else { '>
+	
+	on <"[$r name]">_exe_validate
+	from <"[$r name]">_validate to <"[$r name]">_validate_2
+	//eager
+	do { validate_value = BIP_<"$comp">_<"[$r name]">_validate(activity_received); }
+	resume <'if {![catch {[$r validate] wcet}]} {'> (c <= <"[expr [[[$r validate] wcet] value]*$slowdown*1000000]">)<'}'>
+	
+	on valid_<"[$r name]">
+	from <"[$r name]">_validate_2 to <"[$r name]">_
+	provided (BIP_genom_ok_p(validate_value))
+	//eager
+	//resume
+	
+	on invalid_<"[$r name]">
+	from <"[$r name]">_validate_2 to free
+	provided (!BIP_genom_ok_p(validate_value))
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_rqst_report(activity_received); }
+	//resume
+	
+	
+<'}}
+if {[$r kind]=="activity"} {
+    if {[llength [$r interrupts]]} {'>
+	on inter_<"[$r name]">
+	from <"[$r name]">_ to <"[$r name]">_interrupt
+	//eager
+	//resume
+	
+	on act_<"[$r name]">
+	from <"[$r name]">_interrupt to free
+	//eager
+	do { BIP_<"$comp">_send_ir(activity_received); }
+	//resume
+	
+<'    } else {'>
+	on act_<"[$r name]">
+	from <"[$r name]">_ to free
+	//eager
+	do { BIP_<"$comp">_send_ir(activity_received); }
+	//resume
+
+	
+<'    }
+} else {
+    if {[llength [$r interrupts]]} {
+	if {[llength [$r mutex]] || $mut($counter)} {'>
+	on lock_res_<"[$r name]">
+	from <"[$r name]">_ to <"[$r name]">_2
+	//eager
+	do {c = 0;}
+	//resume
+	
+	on unlock_res_<"[$r name]">
+	from <"[$r name]">_2 to <"[$r name]">_interrupt
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_control(activity_received); }
+	resume<'if {![catch {$r wcet}]} {'> (c <= <"[expr [$r wcet]*$slowdown*1000000]">)<'}'>
+	
+<'} else {'>
+	on exec_<"[$r name]">
+	from <"[$r name]">_ to <"[$r name]">_interrupt
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_control(activity_received); }
+	resume<'if {![catch {$r wcet}]} {'> (c <= <"[expr [$r wcet]*$slowdown*1000000]">)<'}'>
+	
+<'}'>
+
+	on inter_<"[$r name]">
+	from <"[$r name]">_interrupt to free
+	//eager
+	do {BIP_<"$comp">_<"[$r name]">_rqst_report(activity_received);}
+	//resume
+
+	
+<'} else {
+    if {[llength [$r mutex]] || $mut($counter)} {'>
+	on lock_res_<"[$r name]">
+	from <"[$r name]">_ to <"[$r name]">_2
+	//eager
+	do {c = 0;}
+	//resume
+	
+	on unlock_res_<"[$r name]">
+	from <"[$r name]">_2 to free
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_control(activity_received); 
+	BIP_<"$comp">_<"[$r name]">_rqst_report(activity_received); }
+	resume<'if {![catch {$r wcet}]} {'> (c <= <"[expr [$r wcet]*$slowdown*1000000]">)
+<'}'>
+
+<'} else {'>
+	on exec_<"[$r name]">
+	from <"[$r name]">_ to free
+	//eager
+	do { BIP_<"$comp">_<"[$r name]">_control(activity_received); 
+	BIP_<"$comp">_<"[$r name]">_rqst_report(activity_received); }
+	resume<'if {![catch {$r wcet}]} {'> (c <= <"[expr [$r wcet]*$slowdown*1000000]">)
+<'}'>
+
+<'}}}
+incr counter}'>
+	
+	on clear
+	from free to free
+	//eager
+	//resume
+
+	on no_more_replies
+	from free to release
+	//eager
+	//resume
+	
+	on launch
+	from release to release
+	//eager
+	//resume
+	
+	on finished
+	from release to idle
+	//eager
+	//resume
+	
+end
+
+<'set counter 0
+set permanent [list]
+foreach t [$component tasks] {
+    set nostopt($counter) [list]
+    set resumeperm($counter) [list]
+    set resumepermstart($counter) [list]
+    if {![catch {$t period}]} {'>
+/* <"[$t name]"> timer */
+
+atom type TIMER_<"[$t name]">_<"$comp">()
+	clock c unit microsecond
+	export port Port tick()
+	export port Port init()
+
+	place idle, loop
+
+	initial to idle
+
+	on init
+	from idle to loop
+	do { c = 0; }
+	resume
+
+	on tick
+	from loop to loop
+	provided (c >= <"[expr [[$t period] value]*$slowdown*1000000]">)
+	do { c = 0; }
+
+//	invariant inv at loop provided (c <= <"[expr [[$t period] value]*$slowdown*1000000]">)
+end
+
+	<'    }
+    if {[llength [$t codels]]} {
+	lappend permanent $t'>
+	
+/* <"[$t name]"> permanent activity */
+
+atom type PERM_<"[$t name]">_<"$comp">()
+
+	data genom_<"$comp">_activity_ptr permanent
+	data genom_event next_state
+
+	clock c unit microsecond
+
+<'	set test [list]
+	set startyields [list]
+	foreach c [$t codels] {
+	    foreach tr [$c triggers] {
+		if {[$tr name]=="start"} {
+		    foreach y [$c yields] {
+			lappend startyields $y}'>
+	export port Port begin()<'
+		} else {'><"\n\t"><'
+		    if {$tr in $startyields} {'>export <'}'>port Port to_<"[$tr name]">()<"\n"><'}
+			 
+		if {[llength [$c mutex]]} {'>
+	
+	export port Port lock_res_<"[$c name]">()<"\n\t">export port Port unlock_res_<"[$c name]">()<"\n"><'}}
+	    if {![llength [$c mutex]]} {'>
+	port Port to_<"[$tr name]">_test()<"\n"><'}
+	    foreach y [$c yields] {
+		if {[$y kind] == "pause event"} {
+		    if {[$y name] in $test} {continue}
+		    lappend test [$y name]
+		    if {$y in $startyields} {
+			lappend resumepermstart($counter) [$y name]}}}}
+	if {[llength $test]} {
+	    set resumeperm($counter) $test'>
+	
+	export port Port resume_()<"\n"><'
+	    foreach te $test {'>
+	export port Port to_pause_<"$te">()<"\n"><'}}'>
+	
+	export port Port to_ether()
+	export port Port void()
+
+	place idle
+<'	foreach c [$t codels] {
+	    foreach tr [$c triggers] {'>, <"[$tr name]">_, <"[$tr name]">_test<'
+		if {[llength [$c mutex]]} {'>, <"[$tr name]">_2<'		}}}
+	    foreach te $test {'>, pause_<"$te"><'}'>, ether_
+  
+	initial to idle
+	
+	on begin
+	from idle to start_ // spawning <"[$t name]">
+	//eager
+	do {permanent = BIP_<"$comp">_<"[$t name]">_permanent_activity();
+	c = 0;}
+	//resume
+
+
+<'
+set genpause [list]
+	    foreach c [$t codels] {
+		foreach tr [$c triggers] {
+		    set func [$t class]_[$t name]_[$tr name]
+		    if {[llength [$c mutex]]} {'>
+				
+	on lock_res_<"[$c name]">
+	from <"[$tr name]">_ to <"[$tr name]">_2
+	//eager
+	do {c = 0;}
+	//resume
+	
+	
+	on unlock_res_<"[$c name]"> // call codel
+	from <"[$tr name]">_2 to <"[$tr name]">_test
+	//eager
+	do { next_state = BIP_<"$comp">_codel_<"$func">(permanent); }
+	resume<'if {![catch {$c wcet}]} {'> (c <= <"[expr [[$c wcet] value]*$slowdown*1000000]">)
+
+<'}'>
+<'} else {'>
+		
+	on to_<"[$tr name]">_test // call codel
+	from <"[$tr name]">_ to <"[$tr name]">_test
+	//eager
+	do { next_state = BIP_<"$comp">_codel_<"$func">(permanent); }
+	resume
+
+<'if {![catch {$c wcet}]} {'> (c <= <"[expr [[$c wcet] value]*$slowdown*1000000]">)<'}}
+foreach y [$c yields] {
+    if {[$y kind] == "pause event"} {'>
+		
+	on to_pause_<"[$y name]">
+	from <"[$tr name]">_test to pause_<"[$y name]">
+	provided (BIP_<"$comp">_pause_<"[$y name]">_p(next_state)) 
+	//eager
+	//resume
+
+<' if {!($y in $genpause)} {'>
+	on resume_
+	from pause_<"[$y name]"> to <"[$y name]">_
+	do {c = 0;}
+	//resume
+<' lappend genpause $y}'>
+	
+<'    } else {'>
+	
+	on to_<"[$y name]">
+	from <"[$tr name]">_test to <"[$y name]">_
+	provided (BIP_<"$comp">_<"[$y name]">_p(next_state))
+	//eager
+	do {c = 0;}
+	//resume
+<'}}}}'>
+
+	on void
+	from ether_ to ether_
+	//eager
+	//resume
+	
+end
+	  
+<'}'>
+
+/* <"[$t name]"> manager */
+
+atom type MANAGER_<"[$t name]">_<"$comp">()
+	clock c unit microsecond
+
+<'if {![catch {$t period}]} {'>
+	export port Port tick()<'}
+if {[llength [$t services]]} {'>
+	
+	export port Port skipall()<'}'>
+	export port Port ended()<'
+if {[llength [$t codels]]} {'>
+	
+	export port Port begin_perm()
+	export port Port cycle_perm()
+	export port Port skip_perm()
+	
+<'}
+set nostop [list]
+foreach s [$t services] {'>
+
+	export port Port skip_<"[$s name]">_1()
+	export port Port skip_<"[$s name]">_2()
+	export port Port begin_<"[$s name]">_1()
+	export port Port begin_<"[$s name]">_2()
+	export port Port cycle_<"[$s name]">_1()
+	export port Port cycle_<"[$s name]">_2()
+	
+<'
+    set flag 0
+    foreach st [$s fsm] {
+	if {[$st name] == "stop"} {
+	    set flag 1
+	    break}
+    }
+    if {!$flag} {lappend nostop [$s name]
+	lappend nostopt($counter) [$s name]}}
+
+foreach n $nostop {'>
+	export port Port inter_1_<"$n">_1()	
+	export port Port inter_2_<"$n">_1()
+	export port Port inter_1_<"$n">_2()
+	export port Port inter_2_<"$n">_2()<'}'>
+	
+	place idle, <'
+if {[llength [$t codels]]} {'>start_perm, end_perm, <'}
+foreach s [$t services] {'>start_<"[$s name]">_1, end_<"[$s name]">_1, start_<"[$s name]">_2, end_<"[$s name]">_2, <'}
+foreach n $nostop {'>interrupt_<"$n">_1, interrupt_<"$n">_2, <'}'>finish
+	
+	initial to idle
+	
+<'if {![catch {$t period}]} {'>
+	on tick
+	from idle to <'
+    if {[llength [$t codels]]} {'>start_perm<'
+    } else {'>start_<"[[lindex [$t services] 0] name]">_1<'}'>
+	
+	//eager
+	//resume
+	
+<'}
+
+if {[llength [$t codels]]} {'>
+		
+	on begin_perm
+	from start_perm to end_perm
+	//eager
+	
+	on cycle_perm
+	from end_perm to <'
+	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
+	} else {'>idle<'}'>
+	//resume
+	
+	on skip_perm
+	from start_perm to <'
+	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
+	} else {'>idle<'}'>
+	//eager
+	//resume
+	
+	<'}
+
+set index 1
+foreach s [$t services] {'>
+	
+	
+	on begin_<"[$s name]">_1
+	from start_<"[$s name]">_1 to end_<"[$s name]">_1
+	//eager
+	
+	on cycle_<"[$s name]">_1
+	from end_<"[$s name]">_1 to start_<"[$s name]">_2
+	//resume
+	
+	on begin_<"[$s name]">_2
+	from start_<"[$s name]">_2 to end_<"[$s name]">_2
+	//eager
+	
+	on cycle_<"[$s name]">_2
+	from end_<"[$s name]">_2 to <'
+	if {$index < [llength [$t services]]} {'>start_<"[[lindex [$t services] $index] name]">_1<'
+	} else {'>finish<'}'>
+
+	//resume
+	
+	on skip_<"[$s name]">_1
+	from start_<"[$s name]">_1 to start_<"[$s name]">_2
+	//eager
+	//resume
+	
+	on skip_<"[$s name]">_2
+	from start_<"[$s name]">_2 to <'
+	if {$index < [llength [$t services]]} {'>start_<"[[lindex [$t services] $index] name]">_1<'
+	} else {'>finish<'}'>
+
+	//eager
+	//resume
+	
+	<'	
+	incr index}
+
+foreach n $nostop {'>
+	
+	on inter_1_<"$n">_1
+	from start_<"$n">_1 to interrupt_<"$n">_1
+	//eager
+	//resume
+	
+	on inter_2_<"$n">_1
+	from interrupt_<"$n">_1 to start_<"$n">_2
+	//eager
+	//resume
+	
+	on inter_1_<"$n">_2
+	from start_<"$n">_2 to interrupt_<"$n">_2
+	//eager
+	//resume
+	
+	on inter_2_<"$n">_2
+	from interrupt_<"$n">_2 to <'
+	set index 1
+	foreach s [$t services] {
+		if {[$s name] == $n} {break}
+		incr index}
+		if {$index < [llength [$t services]]} {'>start_<"[[lindex [$t services] $index] name]">_1<'
+		} else {'>finish<'}'>
+	
+	//eager
+	//resume
+		
+<'}
+
+if {[llength [$t services]]} {'>
+	
+	on skipall
+	from start_<"[[lindex [$t services] 0] name]">_1 to idle
+	//eager
+	//resume
+<'}'>
+
+	on ended
+	from finish to idle
+	//eager
+	//resume
+	
+end
+<'foreach s [$t services] {'>
+	
+/* service <"[$s name]"> of <"[$t name]"> */
+	
+atom type SERVICE_<"[$s name]">_<"$comp">()
+
+	data int activity
+	data genom_activity_<"$comp">_<"[$s name]">_ptr activity_casted
+	data genom_event next_state
+	
+	clock c unit microsecond
+	
+	export port Port assign()
+	export port <"$comp">GenoM3Port getarg(activity)
+	export port Port ended()
+	export port Port begin()
+	export port Port reply()<'
+    foreach st [$s fsm] {'>
+
+	port Port to_<"[$st name]">()<"\n"><'}
+	
+    set test [list]
+    foreach c [$s codels] {
+	if {[llength [$c mutex]]} {'>
+	export port Port lock_res_<"[$c name]">()<"\n\t">export port Port unlock_res_<"[$c name]">()<"\n"><'}
+	foreach tr [$c triggers] {
+	
+	    if {![llength [$c mutex]]} {'>
+	port Port to_<"[$tr name]">_test()<"\n"><'}}
+	foreach y [$c yields] {
+	    if {[$y kind] == "pause event"} {
+		if {[$y name] in $test} {continue}
+		lappend test [$y name]}}}
+    if {[llength $test]} {'>
+	
+	export port Port resume_()<"\n"><'
+	foreach te $test {'>
+	export port Port to_pause_<"$te">()<"\n"><'}}'>
+	
+	export port Port interrupted()// all can be interrupted by abort/kill anyway<"\n">
+	
+	place idle, interm<'
+    foreach c [$s codels] {
+	foreach tr [$c triggers] {'>, <"[$tr name]">_, <"[$tr name]">_test<'
+	    if {[llength [$c mutex]]} {'>, <"[$tr name]">_2<'}}}
+    foreach te $test {'>, pause_<"$te"><'}'>
+
+	initial to idle
+	
+	on getarg
+	from idle to interm
+	//resume
+	
+	on assign
+	from interm to idle
+	//eager
+	do { activity_casted = BIP_cast_activity_in_<"$comp">_<"[$s name]">_activity(activity); }
+	//resume	
+
+	on reply
+	from idle to idle
+	do { BIP_<"$comp">_<"[$s name]">_activity_report(activity_casted); }
+	//resume
+	
+	on begin
+	from idle to start_
+	do {c = 0;}
+	//resume
+	
+<'    if {[$s name] in $nostop} {'>
+	
+	on interrupted
+	from idle to idle
+	
+<'    } else {'>
+	
+	on interrupted
+	from idle to stop_
+	do {c = 0;}
+	//resume
+	
+	
+<'    }
+
+set genpause [list]
+set stpause [list]
+    
+    foreach c [$s codels] {
+	foreach tr [$c triggers] {
+	    set func [$s class]_[$s name]_[$tr name]
+	    if {[llength [$c mutex]]} {'>
+					
+	on lock_res_<"[$c name]">
+	from <"[$tr name]">_ to <"[$tr name]">_2
+	//eager
+	do {c = 0;}
+	//resume
+	
+	on unlock_res_<"[$c name]"> // call codel
+	from <"[$tr name]">_2 to <"[$tr name]">_test
+	//eager
+	do { next_state = BIP_<"$comp">_codel_<"$func">(activity_casted); }
+	resume<'if {![catch {$c wcet}]} {'> (c <= <"[expr [[$c wcet] value]*$slowdown*1000000]">)
+
+<'}'>
+	
+	
+<'} else {'>
+		
+	on to_<"[$tr name]">_test // call codel
+	from <"[$tr name]">_ to <"[$tr name]">_test
+	//eager
+	do { next_state = BIP_<"$comp">_codel_<"$func">(activity_casted); }
+	resume<'if {![catch {$c wcet}]} {'> (c <= <"[expr [[$c wcet] value]*$slowdown*1000000]">)
+
+<'}'>
+<'}
+	
+foreach y [$c yields] {
+		
+	if {[$y kind] == "pause event"} {'>
+		
+	on to_pause_<"[$y name]">
+	from <"[$tr name]">_test to pause_<"[$y name]">
+	provided (BIP_<"$comp">_pause_<"[$y name]">_p(next_state))
+	//eager
+	//resume
+
+<' if {!($y in $genpause)} {'>
+	
+	on resume_
+	from pause_<"[$y name]"> to <"[$y name]">_
+	do {c = 0;}
+	//resume
+
+<' lappend genpause $y}'>	
+	
+<'if {!($y in $stpause)} {'>
+<'if {[$s name] in $nostop} {'>
+
+        on interrupted
+        from pause_<"[$y name]"> to idle
+
+<'} else {'>
+
+        on interrupted
+        from pause_<"[$y name]"> to stop_
+        do {c = 0;}
+        //resume
+
+<'}'>
+<' lappend stpause $y }'>
+
+<'} else {
+	
+	if {[$y name]=="ether"} {'>
+		
+	on ended
+	from <"[$tr name]">_test to idle
+	provided (BIP_<"$comp">_ether_p(next_state)<'
+foreach t [$s throws] {'> || BIP_<"[$t cname]">_p(next_state)<'}'>)
+	//eager
+	//resume
+
+
+<'} else {'>
+	
+	on to_<"[$y name]">
+	from <"[$tr name]">_test to <"[$y name]">_
+	provided (BIP_<"$comp">_<"[$y name]">_p(next_state))
+	//eager
+	do {c = 0;}
+	//resume <'}}}}}'>
+
+	
+end	
+	
+<'}
+incr counter}'>
+
+/* manage spawning of different tasks */
+
+atom type READY_<"$comp">()
+	clock c unit microsecond
+	export port Port block()
+	export port Port allow()
+
+	place start, finish
+
+	initial to start
+
+	on block
+	from start to finish
+	//eager
+	//resume
+
+	on allow
+	from finish to finish
+	//resume
+
+end
+
+/* module */
+
+compound type <"$comp">()
+
+	component INIT_<"$comp"> init_<"$comp">()
+	component MAILBOX_<"$comp"> mailbox_<"$comp">()
+	component CONTROL_<"$comp"> control_<"$comp">()
+	component READY_<"$comp"> ready_<"$comp">()
+	component SIGNAL <'
+foreach t [$component tasks] {'>signal_<"[$t name]">_<"$comp">()<'
+    if {$t != [lindex [$component tasks] end]} {'>, <'}}
+foreach t [$component tasks] {'>
+	
+	
+	component MANAGER_<"[$t name]">_<"$comp"> manager_<"[$t name]">_<"$comp">()
+
+<'    if {![catch {$t period}]} {'>
+
+	component TIMER_<"[$t name]">_<"$comp"> timer_<"[$t name]">_<"$comp">()
+
+<'    }'>
+	
+<'    if {[llength [$t codels]]} {'>		
+	component PERM_<"[$t name]">_<"$comp"> perm_<"[$t name]">_<"$comp">()
+<'    }'>
+<'    foreach s [$t services] {'>
+	
+	component SERVICE_<"[$s name]">_<"$comp"> <"[$s name]">_<"$comp">_inst_1(), <"[$s name]">_<"$comp">_inst_2()<'}}'>
+
+	
+<'	if {[llength $activities]} {'>
+	component STATUS <'
+foreach a $activities {'><"[$a name]">_<"$comp">_status_1(), <"[$a name]">_<"$comp">_status_2()<'
+    if {$a != [lindex $activities end]} {'>, <'}}
+		}
+set mutex($gcounter) [list]
+foreach r $requests {
+    foreach c [$r validate] {
+	if {[llength [$c mutex]]} {
+	    lappend mutex($gcounter) [join [list "val" [$r name] "lk" $comp] _]}}
+    if {[$r kind] == "activity"} {
+	foreach c [$r codels] {
+	    if {[llength [$c mutex]]} {
+		lappend mutex($gcounter) [join [list [$c name] [$r name] "lk" $comp] _]}}
+    } else {
+	if {[llength [$r mutex]]} {
+	    lappend mutex($gcounter) [join [list  [$r kind] [$r name] "lk" $comp] _]
+	} else {
+	    foreach c [$r codels] {
+		if {[llength [$c mutex]]} {
+		    lappend mutex($gcounter) [join [list  [$r kind] [$r name] "lk" $comp] _]
+		    break}}}
+    }}
+foreach t [$component tasks] {
+    foreach c [$t codels] {
+	if {[llength [$c mutex]]} {lappend mutex($gcounter) [join [list [$c name] [$t name] "lk" $comp] _]}}}
+
+if {[llength $mutex($gcounter)]} {'>		
+				
+		component LOCK <'
+    foreach m $mutex($gcounter) {'><"$m">()<'
+				if {$m != [lindex $mutex($gcounter) end]} {'>, <'}}}'>
+				
+			
+/* connectors */
+<'set connectdata [list]
+set connectdata2 [list]'>
+
+/* too many activities */
+
+connector singleton_exp too_many_activities_<"$comp">(control_<"$comp">.too_many_activities)
+
+/* check mail box */
+
+connector sync2_with_data_<"$comp"> check_m_box_<"$comp">(mailbox_<"$comp">.mbox_event, control_<"$comp">.check_mbox)
+<'lappend connectdata [join [list "check" "m" "box" $comp] _]'>
+
+/* restart control task */
+
+connector singleton restart_<"$comp">(control_<"$comp">.finished)
+	
+/* spawn control task */
+
+connector sync2 spawn_cntrl_task_<"$comp">(control_<"$comp">.spawn, ready_<"$comp">.allow)
+	
+/* empty box but at least one service ended */
+
+connector singleton noreq_<"$comp">(control_<"$comp">.norequest)
+	
+/* clear (and send final replies) */
+
+connector singleton all_reported_<"$comp">(control_<"$comp">.no_more_replies)
+
+<'foreach a $activities {'>
+
+connector sync3 clear_<"$comp">_<"[$a name]">_1(control_<"$comp">.clear, <"[$a name]">_<"$comp">_status_1.clear, <"[$a name]">_<"$comp">_inst_1.reply)
+connector sync3 clear_<"$comp">_<"[$a name]">_2(control_<"$comp">.clear, <"[$a name]">_<"$comp">_status_2.clear, <"[$a name]">_<"$comp">_inst_2.reply)
+
+<'}
+if {[llength $permanent]} {'>
+	
+/* spawn execution tasks */
+
+<'set index 0
+    foreach p $permanent {'>
+	
+/* <"[$p name]"> */
+
+<'	if {$p == [lindex $permanent 0]} {'>
+	
+connector sync
+<'	    if {![catch {$p period}]} {'>3<'
+	    } else {'>2<'}'> begin_spawn_<"[$p name]">_<"$comp">(init_<"$comp">.ended, perm_<"[$p name]">_<"$comp">.begin
+<'	    if {![catch {$p period}]} {'>, timer_<"[$p name]">_<"$comp">.init<'}'>)
+
+<'}	
+
+	foreach c [$p codels] {
+            foreach tr [$c triggers] {
+                if {[$tr name] == "start"} {
+                    foreach y [$c yields] {'>
+
+connector <'
+if {[$y kind] == "pause event"} {'>sync<'
+} else {'>trig<'}'>
+<'                      if {$p == [lindex $permanent end] || [catch {[lindex $permanent [expr $index+1]] period}]} {'>2<'
+                        } else {'>3<'}'> spawn_<"[$y name]">_<"[$p name]">_<"$comp">(perm_<"[$p name]">_<"$comp">.to_<'
+                        if {[$y kind] == "pause event"} {'>pause_<'}'><"[$y name]">, <'
+                        if {$p == [lindex $permanent end]} {'>ready_<"$comp">.block<'
+                        } else {'>perm_<"[[lindex $permanent [expr $index+1]] name]">_<"$comp">.begin<'
+                            if {![catch {[lindex $permanent [expr $index+1]] period}]} {'>, timer_<"[[lindex $permanent [expr $index+1]] name]">_<"$comp">.init<'}}'>)
+
+<'                  }
+                    break}}
+            break}
+        incr index}
+
+} else {'>
+	
+connector sync2 end_init_comp_<"$comp">(init_<"$comp">.ended, ready_<"$comp">.block)
+	
+<'}
+
+set counter 0
+foreach t [$component tasks] {'>
+	
+/* signal end of activities (or not) */
+	
+connector trig2 end_<"[$t name]">_<"$comp">(manager_<"[$t name]">_<"$comp">.ended, signal_<"[$t name]">_<"$comp">.hold)
+	
+/* report end of activities */
+
+connector sync2 report_<"[$t name]">_<"$comp">(control_<"$comp">.immediate, signal_<"[$t name]">_<"$comp">.endsig)
+	
+<'    if {![catch {$t period}]} {'>
+
+/* period signal */
+
+connector sync2 tick_<"[$t name]">_<"$comp">(manager_<"[$t name]">_<"$comp">.tick, timer_<"[$t name]">_<"$comp">.tick)
+	
+<'}
+
+    if {[llength [$t codels]]} {'>
+	
+/* end permanent activity (asynchrone for first execution) */
+
+connector trig2 end_perm_act_<"[$t name]">_<"$comp">(perm_<"[$t name]">_<"$comp">.to_ether, manager_<"[$t name]">_<"$comp">.cycle_perm)
+	
+/* skip permanent activity (when ended) */
+
+connector sync2 skip_perm_act_<"[$t name]">_<"$comp">(manager_<"[$t name]">_<"$comp">.skip_perm, perm_<"[$t name]">_<"$comp">.void)
+	
+<'	if {[llength $resumeperm($counter)]} {'>
+	
+/* resume permanent activity */
+
+connector sync2 resume_perm_act_<"[$t name]">_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_perm, perm_<"[$t name]">_<"$comp">.resume_)
+	
+/* pause permanent activity (asynchrone for first execution) */
+
+<'	    foreach y $resumepermstart($counter) {'>
+					
+connector trig2 pause_perm_act_<"$y">_<"[$t name]">_<"$comp">(perm_<"[$t name]">_<"$comp">.to_pause_<"$y">, manager_<"[$t name]">_<"$comp">.cycle_perm)
+
+<'}	
+	    foreach y $resumeperm($counter) {
+		if {!($y in $resumepermstart($counter))} {'>
+		
+connector trig2 pause_perm_act_<"$y">_<"[$t name]">_<"$comp">(perm_<"[$t name]">_<"$comp">.to_pause_<"$y">, manager_<"[$t name]">_<"$comp">.cycle_perm)
+	
+<'}}}}
+
+	
+    if {[llength [$t services]]} {'>
+	
+/* no active instance */
+
+connector sync<"[expr [llength [$t services]]*$max+1]"> skip_all_<"[$t name]">_<"$comp">(manager_<"[$t name]">_<"$comp">.skipall<'
+	foreach s [$t services] {'>, <"[$s name]">_<"$comp">_status_1.void, <"[$s name]">_<"$comp">_status_2.void<'}'>)
+	
+<'	foreach s [$t services] {
+	    set test [list]
+	    foreach c [$s codels] {
+		foreach y [$c yields] {
+		    if {[$y kind] == "pause event"} {
+			if {[$y name] in $test} {continue}
+			lappend test [$y name]}}}
+	    if {[llength $test]} {'>
+		
+/* resume (paused last cycle) */
+
+connector sync3 resume_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.resume_, <"[$s name]">_<"$comp">_status_1.run)
+connector sync3 resume_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.resume_, <"[$s name]">_<"$comp">_status_2.run)
+
+<'foreach te $test {'>
+	
+/* pause events */
+
+connector sync2 pause_<"$te">_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.cycle_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.to_pause_<"$te">)
+connector sync2 pause_<"$te">_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.cycle_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.to_pause_<"$te">)
+	
+<'}}'>
+	
+/* inactive instances */
+
+connector sync2 jump_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.skip_<"[$s name]">_1, <"[$s name]">_<"$comp">_status_1.void)
+connector sync2 jump_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.skip_<"[$s name]">_2, <"[$s name]">_<"$comp">_status_2.void)
+	
+/* <"[$s name]"> instance 1 & 2*/
+
+/* nominal execution */
+
+connector sync3 nominal_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.begin, <"[$s name]">_<"$comp">_status_1.run)
+connector sync3 nominal_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.begin, <"[$s name]">_<"$comp">_status_2.run)
+	
+/* end */
+
+connector sync4 finished_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.cycle_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.ended, <"[$s name]">_<"$comp">_status_1.finished, signal_<"[$t name]">_<"$comp">.sig)
+connector sync4 finished_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.cycle_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.ended, <"[$s name]">_<"$comp">_status_2.finished, signal_<"[$t name]">_<"$comp">.sig)
+	
+/* interruption */
+
+<'if {[$s name] in $nostopt($counter)} {'>
+	
+connector sync2 interrupted_1_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.inter_1_<"[$s name]">_1, <"[$s name]">_<"$comp">_status_1.inter)
+connector sync4 interrupted_2_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.inter_2_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.interrupted, <"[$s name]">_<"$comp">_status_1.finished, signal_<"[$t name]">_<"$comp">.sig)
+	
+connector sync2 interrupted_1_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.inter_1_<"[$s name]">_2, <"[$s name]">_<"$comp">_status_2.inter)
+connector sync4 interrupted_2_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.inter_2_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.interrupted, <"[$s name]">_<"$comp">_status_2.finished, signal_<"[$t name]">_<"$comp">.sig)   
+	
+<'} else {'>
+	
+connector sync3 interrupted_<"[$s name]">_1_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_1, <"[$s name]">_<"$comp">_inst_1.interrupted, <"[$s name]">_<"$comp">_status_1.inter)	
+connector sync3 interrupted_<"[$s name]">_2_<"$comp">(manager_<"[$t name]">_<"$comp">.begin_<"[$s name]">_2, <"[$s name]">_<"$comp">_inst_2.interrupted, <"[$s name]">_<"$comp">_status_2.inter)
+		
+<'}}}
+incr counter}
+
+foreach a $activities {'>
+	
+/* receive requests */	
+
+connector sync2 get_pointer_<"[$a name]">_1_<"$comp">(control_<"$comp">.req_<"[$a name]">_, <"[$a name]">_<"$comp">_inst_1.assign)
+connector sync2 get_pointer_<"[$a name]">_2_<"$comp">(control_<"$comp">.req_<"[$a name]">_, <"[$a name]">_<"$comp">_inst_2.assign)
+connector sync3_with_data_<"$comp"> request_<"[$a name]">_1_<"$comp">(control_<"$comp">.req_<"[$a name]">, <"[$a name]">_<"$comp">_status_1.activ, <"[$a name]">_<"$comp">_inst_1.getarg)
+connector sync3_with_data_<"$comp"> request_<"[$a name]">_2_<"$comp">(control_<"$comp">.req_<"[$a name]">, <"[$a name]">_<"$comp">_status_2.activ, <"[$a name]">_<"$comp">_inst_2.getarg)
+<'lappend connectdata2 [join [list "request" [$a name] "1" $comp] _]
+lappend connectdata2 [join [list "request" [$a name] "2" $comp] _]'>
+
+
+	
+/* activate */
+
+connector trig3 activate_<"[$a name]">_<"$comp">(control_<"$comp">.act_<"[$a name]">, <"[$a name]">_<"$comp">_status_1.hold, <"[$a name]">_<"$comp">_status_2.hold)
+	
+<'if {[llength [$a validate]]} {'>
+	
+/* deactivate */
+
+connector trig3 deactivate_<"[$a name]">_<"$comp">(control_<"$comp">.invalid_<"[$a name]">, <"[$a name]">_<"$comp">_status_1.deactiv, <"[$a name]">_<"$comp">_status_2.deactiv)
+<'}
+if {[llength [$a interrupts]]} {'>
+	
+/* interrupt incompatible activities */
+
+connector trig<"[expr [llength [$a interrupts]]*2+1]"> interr_<"[$a name]">_<"$comp">(control_<"$comp">.inter_<"[$a name]"><'
+	foreach i [$a interrupts] {'>, <"[$i name]">_<"$comp">_status_1.interrupt, <"[$i name]">_<"$comp">_status_2.interrupt<'}'>)
+
+<'    }'>
+
+/* launch pending instances */
+
+connector sync<'
+if {$a in [$a interrupts]} {'><"[expr [llength [$a interrupts]]*2+1]"><'
+} else {'><"[expr [llength [$a interrupts]]*2+2]"><'}'> launch_<"[$a name]">_1_<"$comp">(control_<"$comp">.launch, <"[$a name]">_<"$comp">_status_1.launch<'
+if {$a in [$a interrupts]} {'>, <"[$a name]">_<"$comp">_status_2.void<'}
+foreach i [$a interrupts] {
+    if {$i != $a} {'>, <"[$i name]">_<"$comp">_status_1.void, <"[$i name]">_<"$comp">_status_2.void<'}}'>)
+		
+connector sync<'
+if {$a in [$a interrupts]} {'><"[expr [llength [$a interrupts]]*2+1]"><'
+} else {'><"[expr [llength [$a interrupts]]*2+2]"><'}'> launch_<"[$a name]">_2_<"$comp">(control_<"$comp">.launch, <"[$a name]">_<"$comp">_status_2.launch<'
+if {$a in [$a interrupts]} {'>, <"[$a name]">_<"$comp">_status_1.void<'}
+foreach i [$a interrupts] {
+    if {$i != $a} {'>, <"[$i name]">_<"$comp">_status_1.void, <"[$i name]">_<"$comp">_status_2.void<'}}'>)
+		
+
+<'}'>
+
+/* non activities */
+
+<'foreach n $nonactivities {'>
+	
+/* receive request */
+	
+connector singleton_exp request_<"[$n name]">_<"$comp">(control_<"$comp">.req_<"[$n name]">)
+	
+<'    if {[llength [$n interrupts]]} {
+set intnew [list]
+foreach i [$n interrupts] {
+if {[$i kind] == "activity"} {lappend intnew $i}}'>	
+connector trig<"[expr [llength $intnew]*2+1]"> inter_inc_<"[$n name]">_<"$comp">(control_<"$comp">.inter_<"[$n name]"><'
+	foreach i $intnew {'>, <"[$i name]">_<"$comp">_status_1.interrupt, <"[$i name]">_<"$comp">_status_2.interrupt<'}'>)<'}}
+
+if {[llength $mutex($gcounter)]} {'>
+	
+/* mutual exclusion connectors */<'}
+
+foreach t [$component tasks] {
+    foreach c [$t codels] {
+	if {[llength [$c mutex]]} {'>
+			
+/* <"[$t name]"> permanent activity. codel <"[$c name]"> */
+
+connector sync<"[expr [llength [$c mutex]]+2]"> take_res_<"[$c name]">_<"[$t name]">_<"$comp">(perm_<"[$t name]">_<"$comp">.lock_res_<"[$c name]">, <"[$c name]">_<"[$t name]">_lk_<"$comp">.take<'
+	    foreach m [$c mutex] {
+		if {![catch {$m service}]} {
+		    if {$m == [[$m service] validate]} {'>, val<'
+		    } else {
+			if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
+			} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+		} else {
+		    if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
+		    } else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"$comp">.check<'}'>)
+	
+connector sync2 give_res_<"[$c name]">_<"[$t name]">_<"$comp">(perm_<"[$t name]">_<"$comp">.unlock_res_<"[$c name]">, <"[$c name]">_<"[$t name]">_lk_<"$comp">.give)
+
+<'	}}}
+
+foreach r $requests {
+    foreach v [$r validate] {
+	if {[llength [$v mutex]]} {'>
+				
+/* <"[$r name]"> validation codel */
+				
+	
+connector sync<"[expr [llength [$v mutex]]+2]"> take_res_<"[$v name]">_<"[$r name]">_<"$comp">(control_<"$comp">.lock_res_<"[$r name]">_validate, val_<"[$r name]">_lk_<"$comp">.take<'
+	    foreach m [$v mutex] {
+		if {![catch {$m service}]} {
+		    if {$m == [[$m service] validate]} {'>, val<'
+		    } else {
+			if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
+			} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+		} else {
+		    if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
+		    } else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"$comp">.check<'}'>)
+		
+connector sync2 give_res_<"[$v name]">_<"[$r name]">_<"$comp">(control_<"$comp">.unlock_res_<"[$r name]">_validate, val_<"[$r name]">_lk_<"$comp">.give)
+		
+<'}}
+    if {[$r kind] == "activity"} {
+	foreach c [$r codels] {
+	    if {[llength [$c mutex]]} {'>
+			
+/* codel <"[$c name]"> service <"[$r name]"> */
+	
+	
+connector sync<"[expr [llength [$c mutex]]+2]"> take_res_<"[$c name]">_<"[$r name]">_1_<"$comp">(<"[$r name]">_<"$comp">_inst_1.lock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"$comp">.take<'
+		foreach m [$c mutex] {
+		    if {![catch {$m service}]} {
+			if {$m == [[$m service] validate]} {'>, val<'
+			} else {
+			    if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
+			    } else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+		    } else {
+			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
+			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"$comp">.check<'}'>)
+		
+connector sync<"[expr [llength [$c mutex]]+2]"> take_res_<"[$c name]">_<"[$r name]">_2_<"$comp">(<"[$r name]">_<"$comp">_inst_2.lock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"$comp">.take<'
+		foreach m [$c mutex] {
+		    if {![catch {$m service}]} {
+			if {$m == [[$m service] validate]} {'>, val<'
+			} else {
+			    if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
+			    } else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+		    } else {
+			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
+			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"$comp">.check<'}'>)
+		
+connector sync2 give_res_<"[$c name]">_<"[$r name]">_1_<"$comp">(<"[$r name]">_<"$comp">_inst_1.unlock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"$comp">.give)
+		
+connector sync2 give_res_<"[$c name]">_<"[$r name]">_2_<"$comp">(<"[$r name]">_<"$comp">_inst_2.unlock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"$comp">.give)
+		
+<'	    }}
+    } else {'>
+	
+/* <"[$r name]"> */
+
+<'	set test [join [list  [$r kind] [$r name] "lk" $comp] _]
+	if {$test in $mutex($gcounter)} {
+		
+	    set mutexx [$r mutex]
+	    set mutex2 [list]
+	    foreach c [$r codels] {
+	    if {[llength [$c mutex]]} { 
+		set mutex2 [concat $mutex2 [$c mutex]]}}
+	
+	set mutexx [concat $mutexx $mutex2]
+	set mutexx [lsort -unique $mutexx]'>
+		
+connector sync<"[expr [llength $mutexx]+2]"> take_res_<"[$r kind]">_<"[$r name]">_<"$comp">(control_<"$comp">.lock_res_<"[$r name]">, <"[$r kind]">_<"[$r name]">_lk_<"$comp">.take<'
+	foreach m $mutexx {
+	    if {![catch {$m service}]} {
+		if {$m == [[$m service] validate]} {'>, val<'
+		} else {
+		    if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
+		    } else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+	    } else {
+		if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
+		} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"$comp">.check<'}'>)
+		
+connector sync2 give_res_<"[$r kind]">_<"[$r name]">_<"$comp">(control_<"$comp">.unlock_res_<"[$r name]">, <"[$r kind]">_<"[$r name]">_lk_<"$comp">.give)
+	
+<'    }}}'>
+
+/* priorities */
+
+/* finish all final replies before leaving the state "free" */
+
+<'foreach a $activities {'>
+priority all_replies_sent_<"$comp">_<"[$a name]">_1 all_reported_<"$comp">:* < clear_<"$comp">_<"[$a name]">_1:*
+priority all_replies_sent_<"$comp">_<"[$a name]">_2 all_reported_<"$comp">:* < clear_<"$comp">_<"[$a name]">_2:*
+
+<'}'>
+
+/* check mailbox when reporting */
+
+priority report_and_process_<"$comp"> noreq_<"$comp">:* < check_m_box_<"$comp">:*
+
+<'foreach t [$component tasks] {'>
+/* report first */
+priority report_first_<"[$t name]">_<"$comp"> check_m_box_<"$comp">:* < report_<"[$t name]">_<"$comp">:*
+
+<'    if {[llength [$t codels]]} {'>
+		
+/* spawn */
+
+	<' foreach c [$t codels] {
+        foreach tr [$c triggers] {
+        if {[$tr name] == "start"} {
+        foreach y [$c yields] {'>
+
+        priority spawn_pr_<"[$y name]">_<"[$t name]">_<"$comp"> end_perm_act_<"[$t name]">_<"$comp">:* < spawn_<"[$y name]">_<"[$t name]">_<"$comp">:*
+
+<'}
+break}}
+break}
+
+}
+
+	if {[llength [$t services]]} {'>
+		
+/* skip all instances if possible */
+priority no_active_inst_<"[$t name]">_<"$comp"> jump_<"[[lindex [$t services] 0] name]">_1_<"$comp">:* < skip_all_<"[$t name]">_<"$comp">:* 
+<'	}}
+
+foreach a $activities {'>
+/* launch activity before restarting control task */
+priority launch_<"[$a name]">_first_<"$comp"> restart_<"$comp">:* < launch_<"[$a name]">_1_<"$comp">:*
+priority launch_<"[$a name]">_2_first_<"$comp"> restart_<"$comp">:* < launch_<"[$a name]">_2_<"$comp">:*
+	
+<'}
+
+set connectdata [concat $connectdata $connectdata2]
+foreach co $connectdata {'>
+export port <"$co">.temporary as <"$co">_
+<'}
+
+foreach n $nonactivities {'>
+export port request_<"[$n name]">_<"$comp">.exp as p_<"$comp">_<"[$n name]">
+<'}'>
+
+export port too_many_activities_<"$comp">.exp as p_<"$comp">
+
+end
+
+compound type Compound_<'if {[llength [dotgen components]]==1} {'>BIPE<'
+} else {'><"$comp"><'}'>()
+
+component <"$comp"> <"$comp">_()
+
+connector singleton no_slot_<"$comp">(<"$comp">_.p_<"$comp">)
+
+<'foreach co $connectdata {'>
+connector singleton_with_data_<"$comp"> <"$co">_link (<"$comp">_.<"$co">_)
+<'}
+
+foreach n $nonactivities {'>
+connector singleton P_<"$comp">_<"[$n name]"> (<"$comp">_.p_<"$comp">_<"[$n name]">)
+<'}'>
+
+
+/* priorities */
+
+<'
+set sub 0
+foreach co $connectdata2 {'>
+priority no_slot_<"$sub">_<"$comp"> no_slot_<"$comp">:* <  <"$co">_link:*
+<'    incr sub}
+foreach n $nonactivities {'>
+priority no_slot_<"$comp">_<"[$n name]"> no_slot_<"$comp">:* < P_<"$comp">_<"[$n name]">:*
+<'}'>
+
+
+end<'
+
+incr gcounter}'>
+
+<'if {[llength [dotgen components]]>1} {'>
+	
+/* all modules */
+	
+compound type Compound_BIPE()
+	
+<'    foreach component [dotgen components] {
+	set comp [$component name]'>
+	
+	component Compound_<"$comp"> Compound_<"$comp">_()
+<'    }'>
+
+end
+
+<'}'>
+
+end

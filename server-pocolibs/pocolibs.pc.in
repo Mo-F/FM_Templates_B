@@ -1,0 +1,17 @@
+<'
+# check arguments
+if {[llength $argv] != 1} { error "expected argument: component" }
+lassign $argv c
+'>
+# pkg-config file for <"[$c name]"> pocolibs server
+#
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: <"[$c name]">-pocolibs
+Description: <"[$c name]"> pocolibs server
+Version: @PACKAGE_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -l<"[$c name]">Client

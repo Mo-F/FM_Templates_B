@@ -1,0 +1,693 @@
+package demo4
+
+
+port type Port()
+
+connector type sync(Port p1, Port p2) // invariant (end)
+	define p1 p2
+end
+
+connector type sync2(Port p1, Port p2, Port p3) // invariant (start)
+	define p1 p2 p3
+end
+
+connector type sync3(Port p1, Port p2, Port p3, Port p4, Port p5) // number of incompatible services * maximum number of instances + 1
+	define p1 p2 p3  p4 p5
+end
+
+connector type sync4(Port p1, Port p2, Port p3, Port p4)
+	define p1 p2 p3  p4
+end
+
+connector type simptrig(Port p1, Port p2)
+	define p1' p2
+end
+
+connector type trig(Port p1, Port p2, Port p3) // invariant (activate)
+	define p1' p2 p3
+end
+
+connector type trig2(Port p1, Port p2, Port p3, Port p4, Port p5) // number of incompatible activities * number of maximum instances + 1
+	define p1' p2 p3 p4 p5
+end
+
+connector type trig3(Port p1, Port p2, Port p3, Port p4, Port p5, Port p6, Port p7) // number of all instances + 1
+	define p1' p2 p3 p4 p5 p6 p7
+end
+
+
+
+atom type Client()
+	export port Port reqmd()
+	export port Port reqgp()
+	export port Port reqmon()
+	export port Port reqsetsp()
+	export port Port finished()
+	export port Port norequest()
+
+
+	place idle, waiting
+
+	initial to idle
+
+	on norequest
+	from idle to waiting
+
+	on reqmd
+	from idle to waiting
+	
+	on reqgp
+	from idle to waiting
+
+	on reqmon
+	from idle to waiting
+
+	on reqsetsp
+	from idle to waiting
+
+	on finished
+	from waiting to idle
+	
+end
+
+atom type Control()
+	clock c
+	export port Port reqmd()
+	export port Port reqgp()
+	export port Port reqmon()
+	export port Port reqsetsp()
+	export port Port intermd()
+	export port Port intergp()
+	export port Port clear()
+	export port Port launch()
+	export port Port actgp()
+	export port Port actmd()
+	export port Port finished()
+	export port Port norequest()
+	export port Port immediate()
+	export port Port resfree()
+	export port Port freeres()	
+
+	place idle, ready, managemd, managegp, managemd2, managegp2, setspwait, setspeed, free, release 
+	
+	initial to idle
+
+	on immediate
+	from idle to ready
+	reset c
+
+	on norequest
+	from ready to free
+	when (c==0)
+
+	on reqmd
+	from idle to managemd
+	reset c
+
+	on reqgp
+	from idle to managegp
+	reset c
+
+	on reqmon
+	from idle to free
+	reset c
+
+	on reqsetsp
+	from idle to setspwait
+
+	on reqsetsp
+	from ready to setspwait
+	when (c==0)
+
+	on resfree
+	from setspwait to setspeed
+	eager
+	reset c
+
+	on freeres
+	from setspeed to free
+	reset c
+
+	on reqmd
+	from ready to managemd
+	when (c==0)
+
+	on reqgp
+	from ready to managegp
+	when (c==0)
+
+	on reqmon
+	from ready to free
+	when (c==0)
+
+	on intermd
+	from managemd to managemd2
+	when (c==0)
+
+	on actmd
+	from managemd2 to free
+	when (c==0)
+
+	on intergp
+	from managegp to managegp2
+	when (c==0)
+
+	on actgp
+	from managegp2 to free
+	when (c==0)
+
+	on clear
+	from free to release
+	when (c==0)
+
+	on launch
+	from release to release
+	when (c==0)
+
+	on finished 
+	from release to idle
+	when (c==0)
+
+	
+	invariant inv at setspeed when (c<=0.2)
+
+end
+
+
+atom type status()
+        export port Port activ()
+        export port Port launch()
+        export port Port hold()
+        export port Port interrupt()
+        export port Port clear()
+        export port Port void()
+        export port Port run()
+        export port Port inter()
+        export port Port finished()
+	export port Port nointer()
+
+place idle, activate, start, running, stopp, ether
+
+        initial to idle
+
+        on activ
+        from idle to activate
+
+	on nointer
+	from idle to running
+
+        on hold
+        from activate to start
+
+        on launch
+        from start to running
+
+        on interrupt
+        from running to stopp
+
+        on interrupt
+        from start to ether
+
+        on clear
+        from ether to idle
+
+        on void
+        from idle to idle
+
+	on void
+	from ether to ether
+
+	on void
+	from activate to activate
+
+	on void
+	from start to start
+
+        on inter
+        from stopp to stopp
+
+        on finished
+        from stopp to ether
+
+        on finished
+        from running to ether
+
+	on run
+	from running to running
+
+
+end
+
+atom type MD()
+	clock c
+	export port Port begin()
+	export port Port res()
+	export port Port pause()
+	export port Port ended()
+	export port Port interrupted()
+	export port Port freeres()
+	export port Port resfree()
+
+	place idle, start, exec1, exec2, paus, endd, stopp
+
+	initial to idle
+
+	on begin
+	from idle to start
+	reset c
+
+	on interrupted
+	from idle to stopp
+	reset c
+	
+	internal from start to exec1
+
+	on resfree
+	from exec1 to exec2
+	eager
+	reset c
+
+	on pause
+	from exec2 to paus
+
+	on res 
+	from paus to exec2
+	eager
+	reset c
+
+	on interrupted
+	from paus to stopp
+	reset c
+
+	on freeres
+	from exec2 to endd
+	reset c
+
+	on ended
+	from endd to idle
+
+	on ended
+	from stopp to idle
+
+	invariant inv1 at start when (c<=1)
+	invariant inv2 at exec2 when (c<=1)
+	invariant inv3 at endd when (c<=1)
+	invariant inv4 at stopp when (c<=1)
+end
+
+atom type GP()
+	clock c
+	export port Port startorres()
+	export port Port pause()
+	export port Port ended()
+	export port Port interrupted()
+
+	port Port intern()
+
+	place idle, start, exec, paus, endd, stopp
+
+	initial to idle
+
+	on startorres
+	from idle to start
+	reset c
+
+	on interrupted
+	from idle to stopp
+	reset c
+	
+	internal from start to exec
+	reset c
+
+	on pause
+	from exec to paus
+
+	on startorres 
+	from paus to exec
+	reset c
+
+	on interrupted
+	from paus to stopp
+	reset c
+
+	on intern
+	from exec to endd
+	reset c
+
+	on ended
+	from endd to idle
+
+	on ended
+	from stopp to idle
+
+	invariant inv1 at start when (c<=1)
+	invariant inv2 at exec when (c<=1)
+	invariant inv3 at endd when (c<=1)
+	invariant inv4 at stopp when (c<=1)
+end
+
+
+atom type monitor()
+	clock c2
+	export port Port startorres()
+	export port Port pause()
+	export port Port ended()
+	export port Port interrupted()
+
+	port Port intern()
+
+	place idle, start, paus, stop1, stop2
+	
+	initial to idle
+
+	on startorres
+	from idle to start
+	reset c2
+
+	on interrupted
+	from idle to stop1
+
+	on pause
+        from start to paus
+
+	on startorres 
+	from paus to start
+	reset c2
+
+	on interrupted
+	from paus to stop1
+
+	on intern
+	from start to stop1
+
+	internal from stop1 to stop2
+	reset c2
+
+	on ended
+	from stop2 to idle
+
+	invariant inv4 at start when (c2<=1)
+	invariant inv5 at stop2 when (c2<=1)
+
+end
+
+atom type lock()
+	export port Port take()
+	export port Port give()
+
+	place free, taken
+
+	initial to free
+
+	on take
+	from free to taken
+
+	on give
+	from taken to free
+
+end
+
+atom type timer()
+	clock ct
+	export port Port tick()
+
+	place loop
+
+	initial to loop
+
+	on tick
+	from loop to loop
+	when (ct==40)
+	reset ct
+end
+
+atom type manager()
+	clock cm
+
+	export port Port tick()
+	export port Port beginmd1()
+	export port Port resumemd1()
+	export port Port cyclemd1()
+	export port Port beginmd2()
+	export port Port resumemd2()
+	export port Port cyclemd2()
+
+	export port Port begingp1()
+	export port Port cyclegp1()
+	export port Port begingp2()
+	export port Port cyclegp2()
+
+	export port Port beginmon1()
+	export port Port cyclemon1()
+	export port Port beginmon2()
+	export port Port cyclemon2()
+
+	export port Port skipmd1()
+	export port Port skipmd2()
+	export port Port skipgp1()
+	export port Port skipgp2()
+	export port Port skipmon1()
+	export port Port skipmon2()
+
+	export port Port ended()
+
+	place idle, startmd1, endmd1, startgp1, endgp1, startmon1, endmon1, startmd2, endmd2, startgp2, endgp2, startmon2, endmon2, finish
+
+	initial to idle
+
+	on tick
+	from idle to startmd1
+	reset cm
+
+	on beginmd1
+	from startmd1 to endmd1
+	when (cm==0)
+
+	on resumemd1
+	from startmd1 to endmd1
+
+	on cyclemd1
+	from endmd1 to startmd2
+	reset cm
+
+	on beginmd2
+	from startmd2 to endmd2
+	when (cm==0)
+
+	on resumemd2
+	from startmd2 to endmd2
+
+	on cyclemd2
+	from endmd2 to startgp1
+	reset cm
+
+	on begingp1
+	from startgp1 to endgp1
+	when (cm==0)
+
+	on cyclegp1
+	from endgp1 to startgp2
+	reset cm
+
+	on begingp2
+	from startgp2 to endgp2
+	when (cm==0)
+
+	on cyclegp2
+	from endgp2 to startmon1
+	reset cm	
+
+	on beginmon1
+	from startmon1 to endmon1
+	when (cm==0)
+
+	on cyclemon1
+	from endmon1 to startmon2
+	reset cm
+
+	on beginmon2
+	from startmon2 to endmon2
+	when (cm==0)
+
+	on cyclemon2
+	from endmon2 to finish
+	reset cm
+
+	on skipmd1
+	from startmd1 to startmd2
+	when (cm==0)
+
+	on skipmd2
+	from startmd2 to startgp1
+	when (cm==0)
+
+	on skipgp1
+	from startgp1 to startgp2
+	when (cm==0)
+
+	on skipgp2
+	from startgp2 to startmon1
+	when (cm==0)
+
+	on skipmon1
+	from startmon1 to startmon2
+	when (cm==0)
+
+	on skipmon2
+	from startmon2 to finish
+	when (cm==0)
+
+	on ended
+	from finish to idle
+	when (cm==0)
+	
+
+	
+end
+
+atom type signal()
+	clock c
+	export port Port sig()
+	export port Port endsig()
+	export port Port hold()
+
+	place start, intermediate, notify
+
+	initial to start
+
+	on sig
+	from start to intermediate
+
+	on sig
+	from intermediate to intermediate
+
+	on hold
+	from intermediate to notify
+	reset c
+
+	on sig
+	from notify to notify
+
+	on endsig
+	from notify to start
+	when (c==0) 
+end
+
+
+compound type demo4()
+	
+	component Client client()
+	component Control control()
+	component status md0(), md1(), gp0(), gp1(), mon0(), mon1()
+	component MD mdinst0(), mdinst1()
+	component GP gpinst0(), gpinst1()
+	component monitor moninst0(), moninst1()
+	component manager taskmanager()
+	component timer tim()
+	component signal serviceend()
+	component lock resource()
+
+	// start (nominal)
+	connector sync2 nominalmd1(mdinst0.begin, taskmanager.beginmd1, md0.run)
+	// I need the resource to resume
+	connector sync4 resumemd1(mdinst0.res, taskmanager.resumemd1, md0.run, resource.take)
+	// start (interrupted)
+	connector sync2 intermd1(mdinst0.interrupted, taskmanager.beginmd1, md0.inter)
+	// pause
+	connector sync2 pausemd1(mdinst0.pause, taskmanager.cyclemd1, resource.give)
+	// end
+	connector sync4 finishedmd1(mdinst0.ended, taskmanager.cyclemd1, md0.finished, serviceend.sig)
+
+	connector sync2 nominalmd2(mdinst1.begin, taskmanager.beginmd2, md1.run)
+	connector sync4 resumemd2(mdinst1.res, taskmanager.resumemd2, md1.run, resource.take)
+	connector sync2 intermd2(mdinst1.interrupted, taskmanager.beginmd2, md1.inter)
+	connector sync2 pausemd2(mdinst1.pause, taskmanager.cyclemd2, resource.give)
+	connector sync4 finishedmd2(mdinst1.ended, taskmanager.cyclemd2, md1.finished, serviceend.sig)
+
+	connector sync execmd1(mdinst0.resfree, resource.take)
+	connector sync endexecmd1(mdinst0.freeres, resource.give)
+	connector sync execmd2(mdinst1.resfree, resource.take)
+	connector sync endexecmd2(mdinst1.freeres, resource.give)
+
+	connector sync execsetsp(control.resfree, resource.take)
+	connector sync endexecsetsp(control.freeres, resource.give)
+
+	connector sync2 nominalgp1(gpinst0.startorres, taskmanager.begingp1, gp0.run)
+	connector sync2 intergp1(gpinst0.interrupted, taskmanager.begingp1, gp0.inter)
+	connector sync pausegp1(gpinst0.pause, taskmanager.cyclegp1)
+	connector sync4 finishedgp1(gpinst0.ended, taskmanager.cyclegp1, gp0.finished, serviceend.sig)
+
+	connector sync2 nominalgp2(gpinst1.startorres, taskmanager.begingp2, gp1.run)
+	connector sync2 intergp2(gpinst1.interrupted, taskmanager.begingp2, gp1.inter)
+	connector sync pausegp2(gpinst1.pause, taskmanager.cyclegp2)
+	connector sync4 finishedgp2(gpinst1.ended, taskmanager.cyclegp2, gp1.finished, serviceend.sig)
+
+	connector sync2 nominalmon1(moninst0.startorres, taskmanager.beginmon1, mon0.run)
+	connector sync2 intermon1(moninst0.interrupted, taskmanager.beginmon1, mon0.inter)
+	connector sync pausemon1(moninst0.pause, taskmanager.cyclemon1)
+	connector sync4 finishedmon1(moninst0.ended, taskmanager.cyclemon1, mon0.finished, serviceend.sig)
+
+	connector sync2 nominalmon2(moninst1.startorres, taskmanager.beginmon2, mon1.run)
+	connector sync2 intermon2(moninst1.interrupted, taskmanager.beginmon2, mon1.inter)
+	connector sync pausemon2(moninst1.pause, taskmanager.cyclemon2)
+	connector sync4 finishedmon2(moninst1.ended, taskmanager.cyclemon2, mon1.finished, serviceend.sig)
+
+	connector sync tomd2(taskmanager.skipmd1, md0.void)
+	connector sync togp1(taskmanager.skipmd2, md1.void)
+	connector sync togp2(taskmanager.skipgp1, gp0.void)
+	connector sync tomon1(taskmanager.skipgp2, gp1.void)
+	connector sync tomon2(taskmanager.skipmon1, mon0.void)
+	connector sync tofinish(taskmanager.skipmon2, mon1.void)
+
+	connector sync report(control.immediate, serviceend.endsig)
+
+	connector sync timertick(taskmanager.tick, tim.tick)
+
+	connector simptrig endmanager(taskmanager.ended, serviceend.hold)
+
+	connector sync reqsp(control.reqsetsp, client.reqsetsp)
+
+	connector sync2 requestmd(control.reqmd, client.reqmd, md0.activ)
+	connector sync2 requestmd2(control.reqmd, client.reqmd, md1.activ)
+
+	connector sync2 requestgp(control.reqgp, client.reqgp, gp0.activ)
+	connector sync2 requestgp2(control.reqgp, client.reqgp, gp1.activ)
+
+	connector sync2 requestmon(control.reqmon, client.reqmon, mon0.nointer)
+	connector sync2 requestmon2(control.reqmon, client.reqmon, mon1.nointer)
+
+	connector trig activatemd(control.actmd, md0.hold, md1.hold)
+	connector trig activategp(control.actgp, gp0.hold, gp1.hold)
+
+	connector trig2 interrmd(control.intermd, md0.interrupt, md1.interrupt, gp0.interrupt, gp1.interrupt)
+	connector trig2 interrgp(control.intergp, md0.interrupt, md1.interrupt, gp0.interrupt, gp1.interrupt)
+
+	connector trig3 clearall(control.clear, md0.clear, md1.clear, gp0.clear, gp1.clear, mon0.clear, mon1.clear)
+
+	connector sync3 launchmd(control.launch, md0.launch, md1.void, gp0.void, gp1.void)
+	connector sync3 launchmd2(control.launch, md1.launch, md0.void, gp0.void, gp1.void)
+	connector sync3 launchgp(control.launch, gp0.launch, md0.void, md1.void, gp1.void)
+	connector sync3 launchgp2(control.launch, gp1.launch, md0.void, md1.void, gp0.void)
+
+	connector sync restart(control.finished, client.finished)
+	connector sync noreq(control.norequest, client.norequest)
+
+	priority launchfirst restart:*<launchmd:*
+	priority launchfirst2 restart:*<launchmd2:*
+	priority launchfirst3 restart:*<launchgp:*
+	priority launchfirst4 restart:*<launchmd:*
+
+	priority reportfirst requestmd:*<report:*
+	priority reportfirst1 requestmd2:*<report:*
+	priority reportfirst2 requestgp:*<report:*
+	priority reportfirst3 requestgp2:*<report:*
+	priority reportfirst4 requestmon:*<report:*
+	priority reportfirst5 requestmon2:*<report:*
+	priority reportfirst6 reqsp:*<report:*
+
+	
+end
+end
+
+
+

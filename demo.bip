@@ -1,0 +1,154 @@
+package demo
+
+port type Port()
+
+connector type sync(Port p1, Port p2)
+	define p1 p2
+end
+
+atom type MD()
+	clock c unit 1 second
+	export port Port tostart()
+	export port Port res()
+	export port Port pause()
+	export port Port ended()
+
+	port Port intern()
+
+	place idle, start, exec1, exec2, paus, end1, end2
+
+	initial to idle
+
+	on tostart
+	from idle to start
+	reset c
+	
+	internal from start to exec1
+
+	internal from exec1 to exec2
+	reset c
+
+	on pause
+	from exec2 to paus
+
+	on res 
+	from paus to exec2
+	reset c
+
+	on intern
+	from exec2 to end1
+
+	internal from end1 to end2
+	reset c
+
+	on ended
+	from end2 to idle
+
+	invariant inv1 at start when (c<=1)
+	invariant inv2 at exec2 when (c<=1)
+	invariant inv3 at end2 when (c<=1)
+end
+
+atom type monitor()
+	clock c2 unit 1 second
+	export port Port tostart()
+	export port Port pause()
+	export port Port res()
+	export port Port ended()
+
+	port Port intern()
+
+	place idle, start, paus, stop1, stop2
+	
+	initial to idle
+
+	on tostart
+	from idle to start
+	reset c2
+
+	on pause
+        from start to paus
+
+	on res 
+	from paus to start
+	reset c2
+
+	on intern
+	from start to stop1
+
+	internal from stop1 to stop2
+	reset c2
+
+	on ended
+	from stop2 to idle
+
+	invariant inv4 at start when (c2<=1)
+	invariant inv5 at stop2 when (c2<=1)
+
+end
+
+atom type timer()
+	clock ct unit 1 second
+	export port Port tick()
+
+	place loop
+
+	initial to loop
+
+	on tick
+	from loop to loop
+	when (ct==40)
+	reset ct
+end
+
+atom type manager()
+	clock cm unit 1 second
+
+	export port Port tick()
+	export port Port beginmd()
+	export port Port cyclemd()
+	export port Port beginmonitor()
+	export port Port cyclemonitor()
+
+	place idle, start1, cycle1, start2, cycle2
+
+	initial to idle
+
+	on tick
+	from idle to start1
+	reset cm
+
+	on beginmd
+	from start1 to cycle1
+	when (cm==0)
+
+	on cyclemd
+	from cycle1 to start2
+	reset cm
+
+	on beginmonitor
+	from start2 to cycle2
+	when (cm==0)
+
+	on cyclemonitor
+	from cycle2 to idle
+end
+
+compound type demo()
+	
+	component MD md()
+	component monitor mon()
+	component manager man()
+	component timer tim()
+
+	connector sync period(tim.tick, man.tick)
+	connector sync launch(md.tostart, man.beginmd)
+	connector sync launch2(md.res, man.beginmd)
+	connector sync launch3(mon.tostart, man.beginmonitor)
+	connector sync launch4(mon.res, man.beginmonitor)
+	connector sync finish(md.pause, man.cyclemd)
+	connector sync finish2(md.ended, man.cyclemd)
+	connector sync finish3(mon.pause, man.cyclemonitor)
+	connector sync finish4(mon.ended, man.cyclemonitor)	
+end
+end

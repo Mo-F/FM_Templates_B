@@ -1,0 +1,12 @@
+#
+# GenoM3/bip pocolibs pkg-config file
+#
+Name: genom3-bip-pocolibs
+Description: bip pocolibs Template for GenoM3
+Version: @VERSION@
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+
+Libs:	-L${libdir}

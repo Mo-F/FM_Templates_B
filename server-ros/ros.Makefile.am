@@ -1,0 +1,151 @@
+<'
+#
+# Copyright (c) 2012-2015 LAAS/CNRS
+# All rights reserved.
+#
+# Permission to use, copy, modify, and distribute this software for any purpose
+# with or without   fee is hereby granted, provided   that the above  copyright
+# notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS  SOFTWARE INCLUDING ALL  IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS. IN NO EVENT SHALL THE AUTHOR  BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR  ANY DAMAGES WHATSOEVER RESULTING  FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+# OTHER TORTIOUS ACTION,   ARISING OUT OF OR IN    CONNECTION WITH THE USE   OR
+# PERFORMANCE OF THIS SOFTWARE.
+#
+#                                            Anthony Mallet on Tue Jan  3 2012
+#
+
+# check arguments
+if {[llength $argv] != 2} { error "expected arguments: types input" }
+lassign $argv types input
+
+# compute handy shortcuts
+set component [dotgen component]
+set comp [$component name]
+'>
+
+ACLOCAL_AMFLAGS=	-I autoconf
+
+# --- ros configuration variables ------------------------------------------
+
+# Store rospack cache locally, since it is architecture dependant
+export ROS_HOME
+override ROS_HOME:=${top_builddir}/ros-cache
+
+# ROS_ROOT is normally obsolete, but still required for gendeps
+export ROS_ROOT
+override ROS_ROOT:=${std_msgs_prefix}/share/ros
+
+# ROS_PACKAGE_PATH points to the ros hierarchy inside generated sources
+export ROS_PACKAGE_PATH
+override ROS_PACKAGE_PATH:=${abs_top_srcdir}/<"$comp">:${ROS_PACKAGE_PATH}
+
+
+# --- component ------------------------------------------------------------
+
+bin_PROGRAMS=	<"$comp">-ros
+
+<"$comp">_ros_SOURCES=\
+	src/<"$comp">_c_types.h			\
+	src/<"$comp">_typecopy.h		\
+	src/<"$comp">_serialize.h		\
+	src/<"$comp">_port.h			\
+	src/<"$comp">_remote.h			\
+	src/<"$comp">_service.h			\
+	src/<"$comp">_action.h			\
+	src/<"$comp">_internals.h		\
+						\
+	src/<"$comp">_main.cc			\
+	src/<"$comp">_activities.cc		\
+	src/<"$comp">_control-task.cc		\
+	src/<"$comp">_control-codels.cc		\
+<'foreach t [$component tasks] {'>
+	src/<"$comp">_<"[$t name]">-task.cc	\
+<'}'>
+	src/<"$comp">_remote.cc			\
+	src/<"$comp">_port.cc			\
+	src/<"$comp">_json.cc			\
+	src/<"$comp">_exception.cc
+
+<"$comp">_ros_CFLAGS=\
+	${PTHREAD_CFLAGS}
+<"$comp">_ros_CXXFLAGS=\
+	${PTHREAD_CFLAGS}
+
+<"$comp">_ros_CPPFLAGS=\
+	${<"$comp">_CFLAGS}			\
+	${genom3_CFLAGS}			\
+	${ROS_CFLAGS}				\
+	${BOOST_CPPFLAGS}
+
+<"$comp">_ros_LDFLAGS=\
+	${<"$comp">_LIBS}			\
+	${genom3_LIBS}				\
+	${ROS_LIBS}				\
+	${BOOST_LDFLAGS} $(patsubst -L%,-R%,${BOOST_LDFLAGS})
+
+<"$comp">_ros_LDADD=\
+	${PTHREAD_LIBS}				\
+	${BOOST_THREAD_LIB}
+
+
+# --- regen ----------------------------------------------------------------
+
+.PHONY: regen
+depend/input.d regen: <"$input">
+	${genom3} <"[dotgen genom cmdline]">		\
+	  <"[dotgen template dir]"> -C . $<
+
+$(eval include depend/input.d)
+
+
+# --- generated files ------------------------------------------------------
+
+md5_files=
+msg_files=
+
+<'foreach t $types {'>
+<'  if {[catch {$t masquerade ros}]} {'>
+md5_files+=	<"$comp">/msg/<"[rosmsg_cname $t]">.msg.md5
+<'  }'>
+<'}'>
+
+<'
+set actions_prefix {
+  Action ActionFeedback ActionGoal ActionResult Feedback Goal Result
+}
+'>
+<'foreach s [concat [$component services] [$component remotes]] {'>
+<'  if {[$s kind] != "activity"} {'>
+md5_files+=	<"$comp">/srv/<"[$s name]">.srv.md5
+<'  } else {'>
+<'    foreach p $actions_prefix {'>
+msg_files+=	<"$comp">/msg/<"[$s name]"><"$p">.msg
+md5_files+=	<"$comp">/msg/<"[$s name]"><"$p">.msg.md5
+<'    }'>
+<'  }'>
+<'}'>
+
+BUILT_SOURCES=	${msg_files} ${md5_files}
+
+<'foreach p $actions_prefix {'><"$comp">/msg/%<"$p">.msg <'}'>: \
+  <"$comp">/action/%.action
+	${GENACTION} -o <"$comp">/msg $<
+
+%.md5.d %.md5: %
+	${MSGMD5}						\
+	  -f '#define genom_md5_$(basename $(notdir $*)) "%s"'	\
+	  -M -o '${@:.d=}' $<
+
+$(eval -include ${md5_files:=.d})
+
+
+# --- cleaning -------------------------------------------------------------
+
+CLEANFILES=	${BUILT_SOURCES} ${md5_files:=.d}
+
+clean-local:
+	-rm -rf ${ROS_HOME}

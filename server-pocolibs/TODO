@@ -1,0 +1,9 @@
+This file contains stuff I think we need to provide in the genom3 library for the BIP Engine.
+
+DONE - permament actvity global for BIPE to grab.
+DONE - we need to make sure that the "ONE" slot we have for an activity in the control task is enough (unlikely).
+control task now has an activity table (with 16 elements).
+
+- we need to clarify the whole h2initglob, taskFromThread(tname)... according to Anthony, h2initGlob should 
+  always be the first call, and it covers the main thread, but it is not even clear if the event port thread 
+  is not created before they call us... Need to check with Jacques.

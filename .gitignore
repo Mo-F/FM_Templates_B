@@ -1,0 +1,14 @@
+Makefile.in
+aclocal.m4
+/autoconf/*
+!/autoconf/*.m4
+/autoconf/libtool.m4
+/autoconf/lt*.m4
+/autom4te.cache/
+/build/
+/build-*/
+configure
+*~
+/BIP-Engine-test-suite/
+/demo-pocolibs-BIP-Engine/
+/out/

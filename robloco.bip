@@ -1,0 +1,1244 @@
+@cpp(include="stdio.h")
+package robloco
+
+extern function printf(string)
+
+port type Port()
+
+connector type sync2(Port p1, Port p2) // invariant (end)
+	define p1 p2
+end
+
+connector type sync3(Port p1, Port p2, Port p3) // invariant (start) & manager + number of instances (skipall)
+	define p1 p2 p3
+end
+
+connector type sync4(Port p1, Port p2, Port p3, Port p4)
+	define p1 p2 p3  p4
+end
+
+connector type sync5(Port p1, Port p2, Port p3, Port p4, Port p5)
+	define p1 p2 p3  p4 p5
+end
+
+connector type sync9(Port p1, Port p2, Port p3, Port p4, Port p5, Port p6, Port p7, Port p8, Port p9) // manager + number of instances (skipall)
+	define p1 p2 p3 p4 p5 p6 p7 p8 p9
+end
+
+connector type trig(Port p1, Port p2)
+	define p1' p2
+end
+
+connector type trig2(Port p1, Port p2, Port p3) // invariant (activate)
+	define p1' p2 p3
+end
+
+
+connector type trig10(Port p1, Port p2, Port p3, Port p4, Port p5, Port p6, Port p7, Port p8, Port p9, Port p10, Port p11) // number of all instances + 1
+	define p1' p2 p3 p4 p5 p6 p7 p8 p9 p10 p11
+end
+
+
+
+atom type CLIENT()
+	export port Port norequest()
+	export port Port reqts()
+	export port Port reqinit()
+	export port Port reqmon()
+	export port Port reqsetp()
+	export port Port reqodo()
+	export port Port reqtstop()
+	export port Port reqodostop()
+	export port Port reqgetsp()
+	export port Port reqgetpos()
+	export port Port finished()
+
+
+	place idle, waiting
+
+	initial to idle
+
+	on norequest
+	from idle to waiting
+
+	on reqts
+	from idle to waiting
+	
+	on reqinit
+	from idle to waiting
+
+	on reqmon
+	from idle to waiting
+
+	on reqsetp
+	from idle to waiting
+
+	on reqodo
+	from idle to waiting
+
+	on reqtstop
+	from idle to waiting
+
+	on reqodostop
+	from idle to waiting
+
+	on reqgetsp
+	from idle to waiting
+
+	on reqgetpos
+	from idle to waiting
+
+	on finished
+	from waiting to idle
+	
+end
+
+atom type CONTROL()
+	clock c
+	export port Port norequest()
+	export port Port immediate()
+	export port Port reqts()
+	export port Port reqinit()
+	export port Port reqmon()
+	export port Port reqsetp()
+	export port Port reqodo()
+	export port Port reqtstop()
+	export port Port reqodostop()
+	export port Port reqgetsp()
+	export port Port reqgetpos()
+	export port Port interts()
+	export port Port interinit()
+	export port Port intersetp()
+	export port Port interodo()
+	export port Port actts()
+	export port Port actinit()
+	export port Port actsetp()
+	export port Port actodo()
+	export port Port clear()
+	export port Port launch()
+	export port Port resfreegetsp()
+	export port Port freeresgetsp()	
+	export port Port resfreegetpos()
+	export port Port freeresgetpos()
+	export port Port finished()
+
+	port Port exetstop()
+	port Port exeodostop()	
+
+	place idle, ready, managets, manageinit, managesetp, manageodo, managetstop, manageodostop, managets2, manageinit2, managesetp2, manageodo2, managetstop2, manageodostop2, getsp, getspwait, getpos, getposwait, free, release 
+	
+	initial to idle
+
+	on immediate
+	from idle to ready
+	eager
+	do { c = 0; }
+
+	on norequest
+	from ready to free
+	provided (c==0)
+	eager
+
+	on reqts
+	from idle to managets
+	do { c = 0; }
+
+	on reqinit
+	from idle to manageinit
+	do { c = 0; }
+
+	on reqmon
+	from idle to free
+	do { c = 0; }
+
+	on reqsetp
+	from idle to managesetp
+	do { c = 0; }
+
+	on reqodo
+	from idle to manageodo
+	do { c = 0; }
+
+	on reqtstop
+	from idle to managetstop
+	do { c = 0; }
+
+	on reqodostop
+	from idle to manageodostop
+	do { c = 0; }
+
+	on reqgetsp
+	from idle to getspwait
+	do { c = 0; }
+
+	on reqgetpos
+	from idle to getposwait
+	do { c = 0; }
+
+	on reqts
+	from ready to managets
+	provided (c==0)
+	eager
+
+	on reqinit
+	from ready to manageinit
+	provided (c==0)
+	eager
+
+	on reqmon
+	from ready to free
+	provided (c==0)
+	eager
+
+	on reqsetp
+	from ready to managesetp
+	provided (c==0)
+	eager
+
+	on reqodo
+	from ready to manageodo
+	provided (c==0)
+	eager
+
+	on reqtstop
+	from ready to managetstop
+	provided (c==0)
+	eager
+
+	on reqodostop
+	from ready to manageodostop
+	provided (c==0)
+	eager
+
+	on reqgetsp
+	from ready to getspwait
+	provided (c==0)
+	eager
+
+	on reqgetpos
+	from ready to getposwait
+	provided (c==0)
+	eager
+
+	on interts
+	from managets to managets2
+	provided (c==0)
+	eager
+
+	on interts
+	from managetstop to managetstop2
+	provided (c==0)
+	eager
+	do {printf("execution of TSStop...\n");}
+	
+
+	on interinit
+	from manageinit to manageinit2
+	provided (c==0)
+	eager
+
+	on intersetp
+	from managesetp to managesetp2
+	provided (c==0)
+	eager
+
+	on interodo
+	from manageodo to manageodo2
+	provided (c==0)
+	eager
+
+	on interodo
+	from manageodostop to manageodostop2
+	provided (c==0)
+	eager
+	do {printf("execution of OdoStop...\n");}
+
+	on actts
+	from managets2 to free
+	provided (c==0)
+	eager
+
+	on actinit
+	from manageinit2 to free
+	provided (c==0)
+	eager
+
+	on actsetp
+	from managesetp2 to free
+	provided (c==0)
+	eager
+
+	on actodo
+	from manageodo2 to free
+	provided (c==0)
+	eager
+
+	on exetstop
+	from managetstop2 to free
+	do { c = 0; 
+	     printf("TSStop executed.\n");}
+
+	on exeodostop
+	from manageodostop2 to free
+	do { c = 0; 
+	     printf("OdoStop executed.\n");}
+
+	on resfreegetsp
+	from getspwait to getsp
+	eager
+	do { c = 0; 
+	     printf("execution of GetSpeed...\n");}
+
+	on freeresgetsp
+	from getsp to free
+	do { c = 0; 
+	     printf("GetSpeed executed.\n");}
+
+	on resfreegetpos
+	from getposwait to getpos
+	eager
+	do { c = 0; 
+	     printf("execution of GetPos...\n");}
+
+	on freeresgetpos
+	from getpos to free
+	do { c = 0; 
+	     printf("GetPos executed.\n");}
+
+	on clear
+	from free to release
+	provided (c==0)
+	eager
+
+	on launch
+	from release to release
+	provided (c==0)
+	eager
+
+	on finished 
+	from release to idle
+	provided (c==0)
+	eager
+
+	
+	invariant inv at getpos provided (c==0)
+	invariant inv2 at getsp provided (c==0)
+	invariant inv3 at managetstop2 provided (c==0)
+	invariant inv4 at manageodostop2 provided (c==0)
+
+end
+
+
+atom type STATUS()
+        export port Port activ()
+        export port Port launch()
+        export port Port hold()
+        export port Port interrupt()
+        export port Port clear()
+        export port Port void()
+        export port Port run()
+        export port Port inter()
+        export port Port finished()
+	export port Port nointer()
+
+place idle, activate, start, running, stopp, ether
+
+        initial to idle
+
+        on activ
+        from idle to activate
+
+	on nointer
+	from idle to running
+
+        on hold
+        from activate to start
+
+        on launch
+        from start to running
+
+        on interrupt
+        from running to stopp
+
+        on interrupt
+        from start to ether
+
+        on clear
+        from ether to idle
+
+        on void
+        from idle to idle
+
+	on void
+	from ether to ether
+
+	on void
+	from activate to activate
+
+	on void
+	from start to start
+
+        on inter
+        from stopp to stopp
+
+        on finished
+        from stopp to ether
+
+        on finished
+        from running to ether
+
+	on run
+	from running to running
+
+
+end
+
+atom type TSS()
+	clock c
+	export port Port begin()
+	export port Port res()
+	export port Port pause()
+	export port Port ended()
+	export port Port interrupted()
+	export port Port resfreetrack()
+	export port Port freerestrack()
+	export port Port freeresstop()
+	export port Port resfreestop()
+
+	port Port totrack()
+
+	place idle, start, track1, track2, track3, paus, stop1, stop2, stop3
+
+	initial to idle
+
+	on begin
+	from idle to start
+	do { c = 0; 
+	     printf("execution of TSS (codel start)...\n");}
+
+	on interrupted
+	from idle to stop1
+	
+	on totrack 
+	from start to track1
+	do {printf("TSS (codel start) executed.\n");}
+
+	on ended
+	from start to idle
+	do {printf("TSS (codel start) executed.\n");}
+
+	on resfreetrack
+	from track1 to track2
+	eager
+	do { c = 0; 
+	     printf("execution of TSS (codel track)...\n");}
+
+	on freerestrack
+	from track2 to track3
+	do { c = 0; 
+	     printf("TSS (codel track) executed.\n");}
+
+	on pause
+	from track3 to paus
+	provided (c==0)
+	eager
+
+	on res 
+	from paus to track1
+
+	on interrupted
+	from paus to stop1
+
+	on resfreestop
+	from stop1 to stop2
+	eager
+	do { c = 0; 
+	     printf("execution of TSS (codel stop)...\n");}
+
+	on freeresstop
+	from stop2 to stop3
+	do { c = 0; 
+	     printf("TSS (codel stop) executed.\n");}
+
+	on ended
+	from stop3 to idle
+	provided (c==0)
+	eager
+
+	invariant inv at start provided (c<=1)
+	invariant inv2 at track2 provided (c<=1)
+	invariant inv3 at stop2 provided (c<=1)
+end
+
+atom type INIT()
+	clock c
+	export port Port begin()
+	export port Port ended()
+	export port Port interrupted()
+
+	place idle, start
+
+	initial to idle
+
+	on begin
+	from idle to start
+	do { c = 0; 
+	     printf("execution of InitPort (codel start)...\n");}
+
+	on ended
+	from start to idle
+	do {printf("InitPort (codel start) executed.\n");}
+
+	on interrupted
+	from idle to idle
+	
+	invariant inv at start provided (c<=1)
+
+end
+
+atom type SET()
+	clock c
+	export port Port begin()
+	export port Port ended()
+	export port Port interrupted()
+	export port Port resfreestart()
+	export port Port freeresstart()
+
+	place idle, start1, start2, write_port
+
+	initial to idle
+
+	on begin
+	from idle to start1
+
+	on resfreestart
+	from start1 to start2
+	eager
+	do { c = 0; 
+	     printf("execution of SetPos (codel start)...\n");}
+
+	on freeresstart 
+	from start2 to write_port
+	do { c = 0; 
+	     printf("SetPos (codel start) executed.\n execution of SetPos (codel write_port)...\n");}
+
+	on ended 
+	from write_port to idle
+	do {printf("SetPos (codel write_port) executed.\n");}
+
+	on interrupted
+	from idle to idle
+	
+	invariant inv at start2 provided (c<=1)
+	invariant inv2 at write_port provided (c<=1)
+
+end
+
+
+atom type ODO()
+	clock c
+	export port Port begin()
+	export port Port ended()
+	export port Port pause()
+	export port Port res()
+	export port Port interrupted()
+	export port Port resfreecomp()
+	export port Port freerescomp()
+
+	port Port tocomp()
+
+	place idle, start, compute1, compute2, write_port, paus, stopp
+
+	initial to idle
+
+	on begin
+	from idle to start
+	do { c = 0; 
+	     printf("execution of TrackOdo (codel start)...\n");}
+
+	on interrupted
+	from idle to stopp
+	do { c = 0; 
+	     printf("execution of TrackOdo (codel stop)...\n");}
+
+	on tocomp
+	from start to compute1
+
+	on ended
+	from start to idle
+	do {printf("TrackOdo (codel start) executed.\n");}
+
+	on resfreecomp
+	from compute1 to compute2
+	eager
+	do { c = 0; 
+	     printf("execution of TrackOdo (codel compute)...\n");}
+
+	on freerescomp
+	from compute2 to write_port
+	do { c = 0; 
+	     printf("TrackOdo (codel compute) executed.\n execution of TrackOdo (codel write_port)...\n");}
+
+	on pause
+	from write_port to paus
+	do {printf("TrackOdo (codel write_port) executed.\n");}
+
+	on res
+	from paus to compute1
+
+	on interrupted
+	from paus to stopp
+	do { c = 0; 
+	     printf("execution of TrackOdo (codel stop)...\n");}
+
+	on ended 
+	from stopp to idle
+	do {printf("TrackOdo (codel stop) executed.\n");}
+	
+	invariant inv at start provided (c<=1)
+	invariant inv2 at compute2 provided (c<=1)
+	invariant inv3 at write_port provided (c<=1)
+	invariant inv4 at stopp provided (c<=1)
+
+end
+
+
+
+atom type MONITOR()
+	clock c
+	export port Port begin()
+	export port Port ended()
+	export port Port pause()
+	export port Port res()
+	export port Port interrupted()
+
+	port Port tostop()
+
+	place idle, start, paus, stopp
+	
+	initial to idle
+
+	on begin
+	from idle to start
+	do { c = 0; 
+	     printf("execution of Monitor (codel start)...\n");}
+
+	on interrupted
+	from idle to stopp
+	do { c = 0; 
+	     printf("execution of Monitor (codel stop)...\n");}
+
+	on pause
+        from start to paus
+	do {printf("Monitor (codel start) executed.\n");}
+
+	on res 
+	from paus to start
+	do { c = 0; 
+	     printf("execution of Monitor (codel start)...\n");}
+
+	on tostop
+	from start to stopp
+	do { c = 0; 
+	     printf("Monitor (codel start) executed.\n execution of Monitor (codel stop)...\n");}
+
+	on interrupted
+	from paus to stopp
+	do { c = 0; 
+	     printf("execution of Monitor (codel stop)...\n");}
+
+	on ended
+	from stopp to idle
+	do {printf("Monitor (codel stop) executed.\n");}
+
+	invariant inv at start provided (c<=1)
+	invariant inv2 at stopp provided (c<=1)
+
+end
+
+
+atom type LOCK()
+	export port Port take()
+	export port Port give()
+	export port Port check()
+
+	place free, taken
+
+	initial to free
+
+	on check
+	from free to free
+
+	on take
+	from free to taken
+
+	on give
+	from taken to free
+
+end
+
+atom type TIMER()
+	clock c
+	export port Port tick()
+
+	place loop
+
+	initial to loop
+
+	on tick
+	from loop to loop
+	provided (c==50)
+	do { c = 0; }
+end
+
+atom type MANAGERODO()
+	clock c
+
+	export port Port tick()
+
+	export port Port skipall()
+
+	export port Port beginodo1()
+	export port Port cycleodo1()
+	export port Port beginodo2()
+	export port Port cycleodo2()
+
+	export port Port begininit1()
+	export port Port cycleinit1()
+	export port Port interinit1()
+	export port Port inter2init1()
+	export port Port begininit2()
+	export port Port cycleinit2()
+	export port Port interinit2()
+	export port Port inter2init2()
+
+	export port Port beginsetp1()
+	export port Port cyclesetp1()
+	export port Port intersetp1()
+	export port Port inter2setp1()
+	export port Port beginsetp2()
+	export port Port cyclesetp2()
+	export port Port intersetp2()
+	export port Port inter2setp2()
+
+	export port Port beginmon1()
+	export port Port cyclemon1()
+	export port Port beginmon2()
+	export port Port cyclemon2()
+
+	export port Port skipodo1()
+	export port Port skipodo2()
+	export port Port skipinit1()
+	export port Port skipinit2()
+	export port Port skipsetp1()
+	export port Port skipsetp2()
+	export port Port skipmon1()
+	export port Port skipmon2()
+
+	export port Port ended()
+
+	place idle, startodo1, endodo1, startinit1, endinit1, intinit1, startsetp1, endsetp1, intsetp1, startmon1, endmon1, startodo2, endodo2, startinit2, endinit2, intinit2, startsetp2, endsetp2, intsetp2, startmon2, endmon2, finish
+
+	initial to idle
+
+	on tick
+	from idle to startodo1
+	eager
+	do { c = 0; }
+
+	on skipall
+	from startodo1 to idle
+	provided (c==0)
+	eager
+
+	on beginodo1
+	from startodo1 to endodo1
+	provided (c==0)
+	eager
+
+	on cycleodo1
+	from endodo1 to startodo2
+	do { c = 0; }
+
+	on beginodo2
+	from startodo2 to endodo2
+	provided (c==0)
+	eager
+
+	on cycleodo2
+	from endodo2 to startinit1
+	do { c = 0; }
+
+	on begininit1
+	from startinit1 to endinit1
+	provided (c==0)
+	eager
+
+	on cycleinit1
+	from endinit1 to startinit2
+	do { c = 0; }
+
+	on interinit1
+	from startinit1 to intinit1
+	provided (c==0)
+	eager
+
+	on inter2init1
+	from intinit1 to startinit2
+	provided (c==0)
+	eager
+
+	on begininit2
+	from startinit2 to endinit2
+	provided (c==0)
+	eager
+
+	on cycleinit2
+	from endinit2 to startsetp1
+	do { c = 0; }	
+
+	on interinit2
+	from startinit2 to intinit2
+	provided (c==0)
+	eager
+
+	on inter2init2
+	from intinit2 to startsetp1
+	provided (c==0)
+	eager
+
+	on beginsetp1
+	from startsetp1 to endsetp1
+	provided (c==0)
+	eager
+
+	on cyclesetp1
+	from endsetp1 to startsetp2
+	do { c = 0; }
+
+	on intersetp1
+	from startsetp1 to intsetp1
+	provided (c==0)
+	eager
+
+	on inter2setp1
+	from intsetp1 to startsetp2
+	provided (c==0)
+	eager
+
+	on beginsetp2
+	from startsetp2 to endsetp2
+	provided (c==0)
+	eager
+
+	on cyclesetp2
+	from endsetp2 to startmon1
+	do { c = 0; }
+
+	on intersetp2
+	from startsetp2 to intsetp2
+	provided (c==0)
+	eager
+
+	on inter2setp2
+	from intsetp2 to startmon1
+	provided (c==0)
+	eager
+
+	on beginmon1
+	from startmon1 to endmon1
+	provided (c==0)
+	eager
+
+	on cyclemon1
+	from endmon1 to startmon2
+	do { c = 0; }
+
+	on beginmon2
+	from startmon2 to endmon2
+	provided (c==0)
+	eager
+
+	on cyclemon2
+	from endmon2 to finish
+	do { c = 0; }
+
+	on skipodo1
+	from startodo1 to startodo2
+	provided (c==0)
+	eager
+
+	on skipodo2
+	from startodo2 to startinit1
+	provided (c==0)
+	eager
+
+	on skipinit1
+	from startinit1 to startinit2
+	provided (c==0)
+	eager
+
+	on skipinit2
+	from startinit2 to startsetp1
+	provided (c==0)
+	eager
+
+	on skipsetp1
+	from startsetp1 to startsetp2
+	provided (c==0)
+	eager
+
+	on skipsetp2
+	from startsetp2 to startmon1
+	provided (c==0)
+	eager
+
+	on skipmon1
+	from startmon1 to startmon2
+	provided (c==0)
+	eager
+
+	on skipmon2
+	from startmon2 to finish
+	provided (c==0)
+	eager
+
+	on ended
+	from finish to idle
+	provided (c==0)
+	eager
+
+	
+end
+
+atom type MANAGERTRACK()
+	clock c
+
+	export port Port skipall()
+
+	export port Port tick()
+	export port Port begints1()
+	export port Port cyclets1()
+	export port Port begints2()
+	export port Port cyclets2()
+	export port Port skipts1()
+	export port Port skipts2()
+	export port Port ended()
+
+	place idle, startts1, endts1, startts2, endts2, endsetp2, finish
+
+	initial to idle
+
+	on tick
+	from idle to startts1
+	eager
+	do { c = 0; }
+
+	on skipall
+	from startts1 to idle
+	provided (c==0)
+	eager
+
+	on begints1
+	from startts1 to endts1
+	provided (c==0)
+	eager
+
+	on cyclets1
+	from endts1 to startts2
+	do { c = 0; }
+
+	on begints2
+	from startts2 to endts2
+	provided (c==0)
+	eager
+
+	on cyclets2
+	from endts2 to finish
+	do { c = 0; }
+
+	on skipts1
+	from startts1 to startts2
+	provided (c==0)
+	eager
+
+	on skipts2
+	from startts2 to finish
+	provided (c==0)
+	eager
+
+	on ended
+	from finish to idle
+	provided (c==0)
+	eager
+	
+
+	
+end
+
+atom type SIGNAL()
+
+	export port Port sig()
+	export port Port endsig()
+	export port Port hold()
+
+	place start, intermediate, notify
+
+	initial to start
+
+	on sig
+	from start to intermediate
+
+	on sig
+	from intermediate to intermediate
+
+	on hold
+	from intermediate to notify
+
+	on sig
+	from notify to notify
+
+	on endsig
+	from notify to start
+end
+
+
+compound type robloco()
+	
+	component CLIENT client()
+	component CONTROL control()
+	component STATUS ts1(), ts2(), odo1(), odo2(), mon1(), mon2(), init1(), init2(), setp1(), setp2()
+	component TSS tsinst1(), tsinst2()
+	component ODO odoinst1(), odoinst2()
+	component MONITOR moninst1(), moninst2()
+	component INIT initinst1(), initinst2()
+	component SET setpinst1(), setpinst2()
+	component MANAGERODO managerodo()
+	component MANAGERTRACK managertrack()
+	component TIMER timerodo(), timertrack()
+	component SIGNAL signalodo(), signaltrack() // one would be confusing and incorrect. one task would signal the end of services of the other.
+	component LOCK getposlock(), getsplock(), setpstlock(), odocomplock(), tstracklock(), tsstoplock()
+
+	// TSStart instance 1
+	// start (nominal)
+	connector sync3 nominalts1(tsinst1.begin, managertrack.begints1, ts1.run)
+	// resume
+	connector sync3 resumets1(tsinst1.res, managertrack.begints1, ts1.run)
+	// start (interrupted)
+	connector sync3 interts1(tsinst1.interrupted, managertrack.begints1, ts1.inter)
+	// pause
+	connector sync2 pausets1(tsinst1.pause, managertrack.cyclets1)
+	// end
+	connector sync4 finishedts1(tsinst1.ended, managertrack.cyclets1, ts1.finished, signaltrack.sig)
+
+	// TSStart instance 2
+	connector sync3 nominalts2(tsinst2.begin, managertrack.begints2, ts2.run)
+	connector sync3 resumets2(tsinst2.res, managertrack.begints2, ts2.run)
+	connector sync3 interts2(tsinst2.interrupted, managertrack.begints2, ts2.inter)
+	connector sync2 pausets2(tsinst2.pause, managertrack.cyclets2)
+	connector sync4 finishedts2(tsinst2.ended, managertrack.cyclets2, ts2.finished, signaltrack.sig)
+
+	// OdoStart instance 1
+	connector sync3 nominalodo1(odoinst1.begin, managerodo.beginodo1, odo1.run)
+	connector sync3 resumeodo1(odoinst1.res, managerodo.beginodo1, odo1.run)
+	connector sync3 interodo1(odoinst1.interrupted, managerodo.beginodo1, odo1.inter)
+	connector sync2 pauseodo1(odoinst1.pause, managerodo.cycleodo1)
+	connector sync4 finishedodo1(odoinst1.ended, managerodo.cycleodo1, odo1.finished, signalodo.sig)
+
+	// OdoStart instance 2
+	connector sync3 nominalodo2(odoinst2.begin, managerodo.beginodo2, odo2.run)
+	connector sync3 resumeodo2(odoinst2.res, managerodo.beginodo2, odo2.run)
+	connector sync3 interodo2(odoinst2.interrupted, managerodo.beginodo2, odo2.inter)
+	connector sync2 pauseodo2(odoinst2.pause, managerodo.cycleodo2)
+	connector sync4 finishedodo2(odoinst2.ended, managerodo.cycleodo2, odo2.finished, signalodo.sig)
+
+	// monitor instance 1
+	connector sync3 nominalmon1(moninst1.begin, managerodo.beginmon1, mon1.run)
+	connector sync3 resumemon1(moninst1.res, managerodo.beginmon1, mon1.run)
+	connector sync3 intermon1(moninst1.interrupted, managerodo.beginmon1, mon1.inter)
+	connector sync2 pausemon1(moninst1.pause, managerodo.cyclemon1)
+	connector sync4 finishedmon1(moninst1.ended, managerodo.cyclemon1, mon1.finished, signalodo.sig)
+
+	// monitor instance 2
+	connector sync3 nominalmon2(moninst2.begin, managerodo.beginmon2, mon2.run)
+	connector sync3 resumemon2(moninst2.res, managerodo.beginmon2, mon2.run)
+	connector sync3 intermon2(moninst2.interrupted, managerodo.beginmon2, mon2.inter)
+	connector sync2 pausemon2(moninst2.pause, managerodo.cyclemon2)
+	connector sync4 finishedmon2(moninst2.ended, managerodo.cyclemon2, mon2.finished, signalodo.sig)
+
+	// initport instance 1
+	connector sync3 nominalinit1(initinst1.begin, managerodo.begininit1, init1.run)
+	connector sync2 interruptedinit1(managerodo.interinit1, init1.inter)
+	connector sync4 interrupted2init1(initinst1.interrupted, managerodo.inter2init1, init1.finished, signalodo.sig)
+	connector sync4 finishedinit1(initinst1.ended, managerodo.cycleinit1, init1.finished, signalodo.sig) 
+	
+	// initport instance 2
+	connector sync3 nominalinit2(initinst2.begin, managerodo.begininit2, init2.run)
+	connector sync2 interruptedinit2(managerodo.interinit2, init2.inter)
+	connector sync4 interrupted2init2(initinst2.interrupted, managerodo.inter2init2, init2.finished, signalodo.sig)
+	connector sync4 finishedinit2(initinst2.ended, managerodo.cycleinit2, init2.finished, signalodo.sig) 
+
+	// setpos instance 1
+	connector sync3 nominalsetp1(setpinst1.begin, managerodo.beginsetp1, setp1.run)
+	connector sync2 interruptedsetp1(managerodo.intersetp1, setp1.inter)
+	connector sync4 interrupted2setp1(setpinst1.interrupted, managerodo.inter2setp1, setp1.finished, signalodo.sig)
+	connector sync4 finishedsetp1(setpinst1.ended, managerodo.cyclesetp1, setp1.finished, signalodo.sig) 
+	
+	// setpos instance 2
+	connector sync3 nominalsetp2(setpinst2.begin, managerodo.beginsetp2, setp2.run)
+	connector sync2 interruptedsetp2(managerodo.intersetp2, setp2.inter)
+	connector sync4 interrupted2setp2(setpinst2.interrupted, managerodo.inter2setp2, setp2.finished, signalodo.sig)
+	connector sync4 finishedsetp2(setpinst2.ended, managerodo.cyclesetp2, setp2.finished, signalodo.sig) 
+
+	// inactive instances:
+	// track
+	connector sync3 noactivetrack(managertrack.skipall, ts1.void, ts2.void)
+	connector sync2 tots2(managertrack.skipts1, ts1.void)
+	connector sync2 tofinishtrack(managertrack.skipts2, ts2.void)
+	// odo
+	connector sync9 noactiveodo(managerodo.skipall, odo1.void, odo2.void, init1.void, init2.void, setp1.void, setp2.void, mon1.void, mon2.void)
+	connector sync2 toodo2(managerodo.skipodo1, odo1.void)
+	connector sync2 toinit1(managerodo.skipodo2, odo2.void)
+	connector sync2 toinit2(managerodo.skipinit1, init1.void)
+	connector sync2 tosetp1(managerodo.skipinit2, init2.void)
+	connector sync2 tosetp2(managerodo.skipsetp1, setp1.void)
+	connector sync2 tomon1(managerodo.skipsetp2, setp2.void)
+	connector sync2 tomon2(managerodo.skipmon1, mon1.void)
+	connector sync2 tofinishodo(managerodo.skipmon2, mon2.void)
+	// report end of activities
+	connector sync2 report(control.immediate, signalodo.endsig)
+	connector sync2 report2(control.immediate, signaltrack.endsig)
+	// period signal
+	connector sync2 odotick(managerodo.tick, timerodo.tick)
+	connector sync2 tracktick(managertrack.tick, timertrack.tick)
+	// signal end of activities (or not)
+	connector trig endodo(managerodo.ended, signalodo.hold)
+	connector trig endtrack(managertrack.ended, signaltrack.hold)
+	// requests: attributes and functions
+	connector sync2 reqgetsp(control.reqgetsp, client.reqgetsp)
+	connector sync2 reqgetpos(control.reqgetpos, client.reqgetpos)
+	connector sync2 reqtstop(control.reqtstop, client.reqtstop)
+	connector sync2 reqodostop(control.reqodostop, client.reqodostop)
+	// activities
+	connector sync3 reqts(control.reqts, client.reqts, ts1.activ)
+	connector sync3 reqts2(control.reqts, client.reqts, ts2.activ)
+
+	connector sync3 reqodo(control.reqodo, client.reqodo, odo1.activ)
+	connector sync3 reqodo2(control.reqodo, client.reqodo, odo2.activ)
+
+	connector sync3 reqinit(control.reqinit, client.reqinit, init1.activ)
+	connector sync3 reqinit2(control.reqinit, client.reqinit, init2.activ)
+
+	connector sync3 reqsetp(control.reqsetp, client.reqsetp, setp1.activ)
+	connector sync3 reqsetp2(control.reqsetp, client.reqsetp, setp2.activ)
+
+	connector sync3 reqmon(control.reqmon, client.reqmon, mon1.nointer)
+	connector sync3 reqmon2(control.reqmon, client.reqmon, mon2.nointer)
+	// go to START status
+	connector trig2 activatets(control.actts, ts1.hold, ts2.hold)
+	connector trig2 activateodo(control.actodo, odo1.hold, odo2.hold)
+	connector trig2 activateinit(control.actinit, init1.hold, init2.hold)
+	connector trig2 activatesetp(control.actsetp, setp1.hold, setp2.hold)
+	// switch conflicting activities to the STOP status
+	connector trig2 interrts(control.interts, ts1.interrupt, ts2.interrupt)
+	connector trig2 interrodo(control.interodo, odo1.interrupt, odo2.interrupt)
+	connector trig2 interrinit(control.interinit, init1.interrupt, init2.interrupt)
+	connector trig2 interrsetp(control.intersetp, setp1.interrupt, setp2.interrupt)
+	// clear (ether to void)
+	connector trig10 clearall(control.clear, ts1.clear, ts2.clear, odo1.clear, odo2.clear, init1.clear, init2.clear, setp1.clear, setp2.clear, mon1.clear, mon2.clear)
+	// process pending activities
+	connector sync3 launchts(control.launch, ts1.launch, ts2.void)
+	connector sync3 launchts2(control.launch, ts2.launch, ts1.void)
+	connector sync3 launchodo(control.launch, odo1.launch, odo2.void)
+	connector sync3 launchodo2(control.launch, odo2.launch, odo1.void)
+	connector sync3 launchinit(control.launch, init1.launch, init2.void)
+	connector sync3 launchinit2(control.launch, init2.launch, init1.void)
+	connector sync3 launchsetp(control.launch, setp1.launch, setp2.void)
+	connector sync3 launchsetp2(control.launch, setp2.launch, setp1.void)
+	
+	connector sync2 restart(control.finished, client.finished)
+	connector sync2 noreq(control.norequest, client.norequest)
+
+	// mutex
+	connector sync4 takegetsp(control.resfreegetsp, getsplock.take, tstracklock.check, tsstoplock.check)
+	connector sync2 givegetsp(control.freeresgetsp, getsplock.give)
+
+	connector sync4 takegetpos(control.resfreegetpos, getposlock.take, setpstlock.check, odocomplock.check)
+	connector sync2 givegetpos(control.freeresgetpos, getposlock.give)
+
+
+	connector sync3 takesetpst(setpinst1.resfreestart, setpstlock.take, getposlock.check)
+	connector sync2 givesetpst(setpinst1.freeresstart, setpstlock.give)
+
+	connector sync3 takesetpst2(setpinst2.resfreestart, setpstlock.take, getposlock.check)
+	connector sync2 givesetpst2(setpinst2.freeresstart, setpstlock.give)
+
+
+	connector sync5 takeodocomp(odoinst1.resfreecomp, odocomplock.take, getposlock.check, tstracklock.check, tsstoplock.check)
+	connector sync2 giveodocomp(odoinst1.freerescomp, odocomplock.give)
+
+	connector sync5 takeodocomp2(odoinst2.resfreecomp, odocomplock.take, getposlock.check, tstracklock.check, tsstoplock.check)
+	connector sync2 giveodocomp2(odoinst2.freerescomp, odocomplock.give)
+
+
+	connector sync4 taketstrack(tsinst1.resfreetrack, tstracklock.take, getsplock.check, odocomplock.check)
+	connector sync2 givetstrack(tsinst1.freerestrack, tstracklock.give)
+
+	connector sync4 taketstrack2(tsinst2.resfreetrack, tstracklock.take, getsplock.check, odocomplock.check)
+	connector sync2 givetstrack2(tsinst2.freerestrack, tstracklock.give)
+
+
+	connector sync4 taketstop(tsinst1.resfreestop, tsstoplock.take, getsplock.check, odocomplock.check)
+	connector sync2 givetstop(tsinst1.freeresstop, tsstoplock.give)
+
+	connector sync4 taketstop2(tsinst2.resfreestop, tsstoplock.take, getsplock.check, odocomplock.check)
+	connector sync2 givetstop2(tsinst2.freeresstop, tsstoplock.give)
+	
+	
+	priority inacttrack tots2:*<noactivetrack:*
+	priority inactodo toodo2:*<noactiveodo:*
+
+	priority launchfirst restart:*<launchts:*
+	priority launchfirst2 restart:*<launchts2:*
+	priority launchfirst3 restart:*<launchodo:*
+	priority launchfirst4 restart:*<launchodo2:*
+	priority launchfirst5 restart:*<launchinit:*
+	priority launchfirst6 restart:*<launchinit2:*
+	priority launchfirst7 restart:*<launchsetp:*
+	priority launchfirst8 restart:*<launchsetp2:*
+
+	priority reportfirst reqts:*<report:*
+	priority reportfirst2 reqts2:*<report:*
+	priority reportfirst3 reqodo:*<report:*
+	priority reportfirst4 reqodo2:*<report:*
+	priority reportfirst5 reqmon:*<report:*
+	priority reportfirst6 reqmon2:*<report:*
+	priority reportfirst7 reqinit:*<report:*
+	priority reportfirst8 reqinit2:*<report:*
+	priority reportfirst9 reqsetp:*<report:*
+	priority reportfirst10 reqsetp2:*<report:*
+	priority reportfirst11 reqgetsp:*<report:*
+	priority reportfirst12 reqgetpos:*<report:*
+	priority reportfirst13 reqtstop:*<report:*
+	priority reportfirst14 reqodostop:*<report:*
+	priority reportfirst15 reqts:*<report2:*
+	priority reportfirst16 reqts2:*<report2:*
+	priority reportfirst17 reqodo:*<report2:*
+	priority reportfirst18 reqodo2:*<report2:*
+	priority reportfirst19 reqmon:*<report2:*
+	priority reportfirst20 reqmon2:*<report2:*
+	priority reportfirst21 reqinit:*<report2:*
+	priority reportfirst22 reqinit2:*<report2:*
+	priority reportfirst23 reqsetp:*<report2:*
+	priority reportfirst24 reqsetp2:*<report2:*
+	priority reportfirst25 reqgetsp:*<report2:*
+	priority reportfirst26 reqgetpos:*<report2:*
+	priority reportfirst27 reqtstop:*<report2:*
+	priority reportfirst28 reqodostop:*<report2:* 
+
+	
+end
+end
+
+
+

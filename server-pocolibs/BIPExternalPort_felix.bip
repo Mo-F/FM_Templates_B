@@ -1,0 +1,92 @@
+<'
+# Copyright (c) 2011-2016 LAAS/CNRS
+# All rights reserved.
+#
+# Redistribution and use  in source  and binary  forms,  with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#   1. Redistributions of  source  code must retain the  above copyright
+#      notice and this list of conditions.
+#   2. Redistributions in binary form must reproduce the above copyright
+#      notice and  this list of  conditions in the  documentation and/or
+#      other materials provided with the distribution.
+#
+#                                      Anthony Mallet on Wed Feb 29 2012
+#
+
+if {[llength $argv] != 1} { error "expected arguments: component" }
+lassign $argv component
+
+# compute handy shortcuts
+set comp [$component name]
+
+lang c++
+'>
+@cpp(include="<"$comp">_BIPExternalPort.hpp",src="external/<"$comp">_BIPExternalPort.cpp")
+// passer des options pour -gencppp-I.... bipc.sh -h (pour voir les options).
+package <"$comp">_BIPExternalPort
+  extern data type genom_activity_ptr
+<'foreach s [$component services] {'>
+  extern data type genom_<"$comp">_<"[$s name]">_activity_ptr
+<'}'>
+
+  extern data type genom_event  // typedef sur genom_event
+
+  port type <"$comp">GenoM3Port(genom_activity_ptr ptr)
+  port type  <"$comp">Init()
+  port type  <"$comp">Validate()
+
+  extern function genom_activity_ptr BIP_<"$comp">_receive_rqst(genom_activity_ptr)
+  extern function genom_event BIP_<"$comp">_validate(genom_activity_ptr)
+  extern function BIP_<"$comp">_init_genom()
+  extern function bool BIP_<"$comp">_genom_ok_p(const genom_activity_ptr)
+
+<'foreach s [$component services] {'>
+  extern function genom_event  BIP_<"$comp">_<"[$s name]">_validate(genom_<"$comp">_<"[$s name]">_activity_ptr)
+  extern function genom_event  BIP_<"$comp">_<"[$s name]">_control( genom_<"$comp">_<"[$s name]">_activity_ptr)
+
+<'}'>
+  atom type Atom()
+    data genom_activity_ptr activity
+    data genom_<"$comp">_<"[$s name]">_activity_ptr <"$comp">_<"[$s name]">_activity
+    data genom_event event
+    clock x unit second
+
+    extern port <"$comp">GenoM3Port p(activity) as "<"$comp">BIPExternalPort" remember
+    port <"$comp">Init <"$comp">init()
+    port <"$comp">Validate <"$comp">validate()
+
+    place START,WAIT, VALIDATE
+
+    initial to START
+
+    on <"$comp">init from START to WAIT
+      do {
+       BIP_<"$comp">_init_genom();
+      }
+      resume
+
+
+    on p from WAIT to VALIDATE
+      provided (x >= 0)
+      eager
+      do {
+       BIP_<"$comp">_receive_rqst(activity);
+      }
+      resume
+
+    on <"$comp">validate from VALIDATE to WAIT
+      provided (BIP_<"$comp">_genom_ok_p(activity))
+      do {
+       event = BIP_<"$comp">_<"[$s name]">_validate(<"$comp">_<"[$s name]">_activity);
+      }
+      resume
+  end
+
+  compound type Compound()
+    component Atom A()
+  end
+end
+
+/* eof */
