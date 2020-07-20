@@ -20,17 +20,17 @@ ACLOCAL_AMFLAGS=-I autoconf
 
 bipdir=${prefix}/${genom3sitedir}/bip
 
-# --- common pocolibs ---------------------------------------------------------------
+# --- common ---------------------------------------------------------------
 
-commonpldir=${bipdir}
-nobase_dist_commonpl_DATA=\
-	common-pocolibs/autoconf/ax_pthread.m4	\
+commondir=${bipdir}
+nobase_dist_common_DATA=\
+	common/autoconf/ax_pthread.m4	\
 					\
-	common-pocolibs/typeutil.tcl		\
+	common/typeutil.tcl		\
 					\
-	common-pocolibs/msglib.h			\
-	common-pocolibs/serialize.h		\
-	common-pocolibs/typecopy.h
+	common/msglib.h			\
+	common/serialize.h		\
+	common/typecopy.h
 
 # --- BIP model -------------------------------------------------------------
 
@@ -38,101 +38,43 @@ bipmodeldir=${bipdir}
 nobase_dist_bipmodel_DATA=\
 	model/template.tcl		\
 	model/model_execution.tcl			\
-	model/model_verification.tcl			\
-	model/model_verification_urgencies.tcl
+	model/model_verification.tcl
 
 
 # --- pkgconfig ---------------------------------------------------------------
 
 pkgconfigdir=	$(libdir)/pkgconfig
-pkgconfig_DATA=	genom3-bip-pocolibs.pc genom3-bip-ros.pc
+pkgconfig_DATA=	genom3-bip-pocolibs.pc
 
-# --- server PocoLibs ---------------------------------------------------------------
 
-serverpocolibsdir=${bipdir}
-nobase_dist_serverpocolibs_DATA=		\
-	server-pocolibs/template.tcl		\
-	server-pocolibs/metadata.gen		\
-						\
-	server-pocolibs/pocolibs.configure.ac	\
-	server-pocolibs/pocolibs.Makefile.am	\
-	server-pocolibs/pocolibs.pc.in		\
-						\
-	server-pocolibs/activity.h		\
-	server-pocolibs/activity.c		\
-	server-pocolibs/codels.mappings.h	\
-	server-pocolibs/control_task.h		\
-	server-pocolibs/control_task.c		\
-	server-pocolibs/control_codels.c	\
-	server-pocolibs/exception.c		\
-	server-pocolibs/exec_task.c		\
-	server-pocolibs/exec_codels.c		\
-	server-pocolibs/main.c			\
-	server-pocolibs/msglib.c		\
-	server-pocolibs/parameters.h		\
-	server-pocolibs/portlib.h		\
-	server-pocolibs/portlib.c		\
-	server-pocolibs/remotelib.h		\
-	server-pocolibs/remotelib.c		\
-	server-pocolibs/genom3_external_for_bip.h\
-	server-pocolibs/main.cpp      \
-	server-pocolibs/BIPGenoM3.cpp   	\
-	server-pocolibs/BIPGenoM3.hpp      	\
-	server-pocolibs/BIPGenoM3.bip
+# --- server ---------------------------------------------------------------
 
-# --- common ros ---------------------------------------------------------------
-
-commonrdir=${bipdir}
-nobase_dist_commonr_DATA=\
-	common-ros/genrosmsg.tcl		\
-	common-ros/ros.manifest.xml		\
+serverdir=${bipdir}
+nobase_dist_server_DATA=\
+	server/template.tcl		\
+	server/metadata.gen		\
 					\
-	common-ros/typecopy.h		\
-	common-ros/genom-serialize.h	\
-	common-ros/serialize.h		\
-	common-ros/portlib.h		\
-	common-ros/service.h		\
-	common-ros/action.h
-
-nobase_dist_commonr_SCRIPTS=\
-	common-ros/msgmd5
-
-commonautoconfdir=${bipdir}
-nobase_dist_commonautoconf_DATA=\
-	common-ros/autoconf/ax_pthread.m4		\
-	common-ros/autoconf/ax_boost_base.m4	\
-	common-ros/autoconf/ax_boost_thread.m4
-
-
-#bin_SCRIPTS=	rosaction
-
-# --- server ROS ---------------------------------------------------------------
-
-serverrosdir=${bipdir}
-nobase_dist_serverros_DATA=		\
-	server-ros/template.tcl		\
+	server/pocolibs.configure.ac	\
+	server/pocolibs.Makefile.am	\
+	server/pocolibs.pc.in		\
 					\
-	server-ros/ros.configure.ac		\
-	server-ros/ros.Makefile.am		\
-					\
-	server-ros/activities.h		\
-	server-ros/codels.mappings.h	\
-	server-ros/internals.h		\
-	server-ros/locals.h			\
-	server-ros/remote.h			\
-	server-ros/port.h			\
-					\
-	server-ros/activities.cc		\
-	server-ros/control-task.cc		\
-	server-ros/control-codels.cc	\
-	server-ros/exception.cc		\
-	server-ros/exec-task.cc		\
-	server-ros/main.cc			\
-	server-ros/remote.cc		\
-	server-ros/port.cc			\
-	server-ros/json.cc			\
-					\
-	server-ros/genom3_external_for_bip.h\
-	server-ros/BIPGenoM3.cpp      	\
-	server-ros/BIPGenoM3.hpp      	\
-	server-ros/BIPGenoM3.bip
+	server/activity.h		\
+	server/activity.c		\
+	server/codels.mappings.h	\
+	server/control_task.h		\
+	server/control_task.c		\
+	server/control_codels.c		\
+	server/exception.c		\
+	server/exec_task.c		\
+	server/exec_codels.c		\
+	server/main.c			\
+	server/msglib.c			\
+	server/parameters.h		\
+	server/portlib.h		\
+	server/portlib.c		\
+	server/remotelib.h		\
+	server/remotelib.c		\
+	server/genom3_external_for_bip.h\
+	server/BIPGenoM3.cpp      \
+	server/BIPGenoM3.hpp      \
+	server/BIPGenoM3.bip

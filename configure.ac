@@ -17,12 +17,7 @@ AC_PROG_INSTALL
 # compilers
 LT_INIT([disable-static])
 AC_PROG_CC
-AC_PROG_CXX
-
 AX_PTHREAD(, [AC_MSG_ERROR([pthread support not available])])
-
-# boost
-AX_BOOST_BASE([1.40],, [AC_MSG_ERROR([boost not available])])
 
 # external software
 PKG_CHECK_MODULES(pocolibs, [pocolibs >= 2.11.99])
@@ -41,53 +36,10 @@ if test "x$prefix" = xNONE; then
   prefix=$pkg_cv_genom3prefix
   AC_MSG_RESULT([$prefix])
 fi
-dnl python
-AC_ARG_VAR(PYTHON, [python interpreter])
-AC_PATH_PROGS(PYTHON, [python python2.7 python2.6])
-if ! test -x "$PYTHON"; then AC_MSG_FAILURE([python not found]); fi
-
-dnl ROS
-PKG_CHECK_MODULES(ROS, [roscpp >= 1.8.15])
-AC_MSG_CHECKING([rosaction dependencies])
-if $PKG_CONFIG --exists --print-errors '
-    genpy >= 0.3.7
-    roslib >= 1.8.10
-    topic_tools >= 1.8.15
-    rosgraph_msgs >= 1.8.15
-    actionlib >= 1.8.7'; then
-  AC_MSG_RESULT([ok])
-else
-  AC_MSG_RESULT([no])
-  AC_MSG_FAILURE([missing ros dependencies])
-fi
-
-# - work out the rpath for -Ldirs found in ros .pc
-# - clean up -l: syntax
-ros_libs=
-for arg in $ROS_LIBS; do
-  case "$arg" in
-    -l:/*/lib*.so)
-      name=${arg##*/lib}; name=${name%.so}
-      path=${arg#-l:}; path=${path%/lib*.so}
-      arg="-L$path -R$path -l$name";;
-    -l:*) AC_MSG_FAILURE([unsupported flag $arg in ROS .pc files]);;
-
-    -L*) arg="$arg -R${arg#-L}";;
-  esac
-  for a in $arg; do
-    case " $ros_libs " in
-      *" $a "*) ;;
-      *) ros_libs="$ros_libs $a";;
-    esac
-  done
-done
-ROS_LIBS=${ros_libs# }
 
 # output
 AC_CONFIG_FILES([
 	genom3-bip-pocolibs.pc
-	genom3-bip-ros.pc
-	common-ros/msgmd5
 	Makefile
 ])
 AC_OUTPUT

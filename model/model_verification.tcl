@@ -346,7 +346,7 @@ atom type CONTROL_<"[$component name]">()
 	} else {'>
 	port Port exec_<"[$r name]">()<"\n"><'}}
 	if {[llength [$r validate]]} {'>
-	port Port valid_<"[$r name]">()<"\n\t"><'if {[$r kind]=="activity"} {'>export<'}'> port Port invalid_<"[$r name]">()<"\n"><'
+	port Port valid_<"[$r name]">()<"\n\t">export port Port invalid_<"[$r name]">()<"\n"><'
 	if {[llength [[$r validate] mutex]]} {'>
 	export port Port wait_<"[$r name]">_validate()<"\n\t">export port Port lock_<"[$r name]">_validate()<"\n\t">export port Port unlock_<"[$r name]">_validate()<"\n"><'
 	} else {'>
@@ -818,15 +818,10 @@ atom type TIMER_<"[$t name]">_<"[$component name]">()
 	clock c
 	export port Port tick()
 	export port Port restart()
-	export port Port init()
 
-	place idle, start, test
+	place start, test
 
-	initial to idle
-	
-	on init
-	from idle to start
-	reset c
+	initial to start
 
 	on tick
 	from start to test
@@ -851,18 +846,18 @@ lappend permanent($gcounter) $t
 atom type PERM_<"[$t name]">_<"[$component name]">()
 	clock c
 
-<'if {$t != [lindex [$component tasks] 0]} {'>export <'}'>port Port begin()
-
 <'set test [list]
 set st 0
 set startyields [list]
 	foreach c [$t codels] {
 		foreach tr [$c triggers] {
 	if {[$tr name]=="start"} {
-		if {([llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]])} {
-		set st 1}
+		set st 1
 		foreach y [$c yields] {
-		lappend startyields $y}
+		lappend startyields $y}'>
+		
+		
+	<'if {$t != [lindex [$component tasks] 0]} {'>export <'}'>port Port begin()<'
 	} else {'><"\n\t"><'
 		if {$tr in $startyields} {'>export <'}'>port Port to_<"[$tr name]">()<"\n"><'}
 			 
@@ -880,7 +875,7 @@ set startyields [list]
 	if {[llength $test]} {
 	set resumeperm($gcounter,$counter) $test'>
 	
-	export port Port resume_()<"\n"><'
+	export port Port resume_<"\n"><'
 	foreach te $test {'>
 	export port Port to_pause_<"$te">()<"\n"><'}}'>
 	
@@ -894,7 +889,8 @@ set startyields [list]
 	foreach c [$t codels] {
 		foreach tr [$c triggers] {lappend invariants [join [list [$tr name] "test"] _] 0'>, <"[$tr name]">_, <"[$tr name]">_test<'
 		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {
-			lappend nts [$tr name]'>, <"[$tr name]">_wait<'
+			lappend nts [$tr name]
+			lappend invariants [join [list [$tr name] "wait"] _] 0'>, <"[$tr name]">_wait<'
 			lappend invariants [join [list [$tr name] "2"] _]
 			if {![catch {$c wcet}]} {lappend invariants [expr [[$c wcet] value]*1000]
 			} else {lappend invariants 0}'>, <"[$tr name]">_2<'
@@ -912,11 +908,7 @@ foreach te $test {'>, pause_<"$te"><'}'>, ether_
 	if {$st} {'>wait<'}'> // spawning <"[$t name]">
 	reset c
 
-<'
-
-set genpause [list]
-
-foreach c [$t codels] {
+<'foreach c [$t codels] {
 		foreach tr [$c triggers] {
 		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
 	
@@ -949,14 +941,11 @@ foreach y [$c yields] {
 	on to_pause_<"[$y name]">
 	from <"[$tr name]">_test to pause_<"[$y name]">
 
-<'if {!($y in $genpause)} {'>
-		
+	
 	on resume_
 	from pause_<"[$y name]"> to <"[$y name]">_<'
 	if {[$y name] in $nts} {'>wait<'}'>
 	reset c
-
-<'lappend genpause $y}'>
 	
 <'} else {'>
 	
@@ -1152,6 +1141,7 @@ atom type SERVICE_<"[$s name]">_<"[$component name]">()
 		foreach tr [$c triggers] {lappend invariants [join [list [$tr name] "test"] _] 0'>, <"[$tr name]">_, <"[$tr name]">_test<'
 		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {
 			lappend nts [$tr name]
+			lappend invariants [join [list [$tr name] "wait"] _] 0
 			lappend invariants [join [list [$tr name] "2"] _]
 			if {![catch {$c wcet}]} {lappend invariants [expr [[$c wcet] value]*1000]
 			} else {lappend invariants 0}'>, <"[$tr name]">_wait, <"[$tr name]">_2<'
@@ -1186,9 +1176,6 @@ atom type SERVICE_<"[$s name]">_<"[$component name]">()
 	
 <'}
 
-set genpause [list]
-set stpause [list]
-
 foreach c [$s codels] {
 		foreach tr [$c triggers] {
 		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
@@ -1221,15 +1208,12 @@ foreach c [$s codels] {
 	on to_pause_<"[$y name]">
 	from <"[$tr name]">_test to pause_<"[$y name]">
 
-<'if {!($y in $genpause)} {'>	
+	
 	on resume_
 	from pause_<"[$y name]"> to <"[$y name]">_<'
 	if {[$y name] in $nts} {'>wait<'}'>
 	reset c
 	
-<'lappend genpause $y}'>
-
-<'if {!($y in $stpause)} {'>
 	
 <'if {[$s name] in $nostop} {'>
 	
@@ -1244,10 +1228,8 @@ foreach c [$s codels] {
 	reset c
 	
 <'}
-
-lappend stpause $y}'>
 	
-<'} else {
+} else {
 	
 	if {[$y name]=="ether"} {'>
 		
@@ -1330,14 +1312,7 @@ foreach t [$component tasks] {'>
 	
 	
 	component MANAGER_<"[$t name]">_<"[$component name]"> manager_<"[$t name]">_<"[$component name]">()
-
-
-
-<'    if {![catch {$t period}]} {'>
-
 	component TIMER_<"[$t name]">_<"[$component name]"> timer_<"[$t name]">_<"[$component name]">()
-	
-<'}'>
 	
 <'if {[llength [$t codels]]} {'>		
 	component PERM_<"[$t name]">_<"[$component name]"> perm_<"[$t name]">_<"[$component name]">()<'}
@@ -1345,15 +1320,12 @@ foreach s [$t services] {'>
 	
 	component SERVICE_<"[$s name]">_<"[$component name]"> <"[$s name]">_<"[$component name]">_inst_1(), <"[$s name]">_<"[$component name]">_inst_2()<'}}'>
 
-<'if {[llength $activities($gcounter)]} {'>
-		
+	
 	component STATUS <'
 	foreach a $activities($gcounter) {'><"[$a name]">_<"[$component name]">_status_1(), <"[$a name]">_<"[$component name]">_status_2()<'
-		if {$a != [lindex $activities($gcounter) end]} {'>, <'}}'>
+		if {$a != [lindex $activities($gcounter) end]} {'>, <'}}
 
-<'}'>
-
-<'foreach l $locks($gcounter) {'>
+foreach l $locks($gcounter) {'>
 	component LOCK_<"$l"> lock_<"$l">()
 	
 <'}
@@ -1393,35 +1365,20 @@ foreach p $permanent($gcounter) {'>
 	
 /* <"[$p name]"> */
 
-<'	if {$p == [lindex $permanent($gcounter) 0]} {'>
-	
-connector <'if {![catch {$p period}]} {'>sync2<'
-} else {'>singleton<'}'> begin_spawn_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.begin
-<'	    if {![catch {$p period}]} {'>, timer_<"[$p name]">_<"[$component name]">.init<'}'>)
-
-<'}	
-
-	foreach c [$p codels] {
-	    foreach tr [$c triggers] {
+<'foreach c [$p codels] {
+	foreach tr [$c triggers] {
 		if {[$tr name] == "start"} {
-		    foreach y [$c yields] {'>
+			foreach y [$c yields] {'>
 		
-connector <'
-if {[$y kind] == "pause event"} {'>sync<'
-} else {'>trig<'}'>
-<'			if {$p == [lindex $permanent($gcounter) end] || [catch {[lindex $permanent($gcounter) [expr $index+1]] period}]} {'>2<'
-			} else {'>3<'}'> spawn_<"[$y name]">_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.to_<'
-			if {[$y kind] == "pause event"} {'>pause_<'}'><"[$y name]">, <'
-			if {$p == [lindex $permanent($gcounter) end]} {'>ready_<"[$component name]">.block<'
-			} else {'>perm_<"[[lindex $permanent($gcounter) [expr $index+1]] name]">_<"[$component name]">.begin<'
-			    if {![catch {[lindex $permanent($gcounter) [expr $index+1]] period}]} {'>, timer_<"[[lindex $permanent($gcounter) [expr $index+1]] name]">_<"[$component name]">.init<'}}'>)
+	connector trig2 spawn_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.to_<'
+	if {[$y kind] == "pause event"} {'>pause_<'}'><"[$y name]">, <'
+	if {$p == [lindex $permanent($gcounter) end]} {'>ready_<"[$component name]">.block<'
+	} else {'>perm_<"[[lindex $permanent($gcounter) [expr $index+1]] name]">_<"[$component name]">.begin<'}'>)
 
-<'		    }
-		    break}}
-	    break}
-	incr index}
-
-}
+<'}
+break}}
+break}
+incr index}}
 
 set counter 0
 foreach t [$component tasks] {
@@ -1470,7 +1427,7 @@ if {[llength [$t codels]]} {'>
 foreach y $resumeperm($gcounter,$counter) {
 	if {!($y in $resumepermstart($gcounter,$counter))} {'>
 		
-	connector trig2 pause_perm_act_<"$y">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.to_pause_<"$y">, manager_<"[$t name]">_<"[$component name]">.cycle_perm)
+	connector sync2 pause_perm_act_<"$y">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.to_pause_<"$y">, manager_<"[$t name]">_<"[$component name]">.cycle_perm)
 	
 <'}}}}
 
@@ -1771,7 +1728,7 @@ foreach c [$a codels] {
 			} else {'><"[$m name]"><'}}'>_<"[$component name]">.exec_ext<'}'>)
 			
 	
-	connector sync<"[expr [llength $conflicts] +2]"> give_<"[$a name]">_<"[$component name]">(control_<"[$component name]">.unlock_<"[$a name]">, lock_<"[$a name]">_<"[$component name]">.end_exec<'
+	connector sync<"[expr [llength $conflicts] +2]"> give_<"[$a name]">_<"[$component name]">(control_<"[$component name]">.lock_<"[$a name]">, lock_<"[$a name]">_<"[$component name]">.end_exec<'
 	foreach m $conflicts {'>, lock_<'
 		if {![catch {$m service}]} {
 			if {$m == [[$m service] validate]} {'>validate_<'
@@ -1798,18 +1755,9 @@ foreach t [$component tasks] {
 		
 /* spawn */
 
-	<' foreach c [$t codels] {
-	foreach tr [$c triggers] {
-	if {[$tr name] == "start"} { 
-	foreach y [$c yields] {'>
-
-	priority spawn_pr_<"[$y name]">_<"[$t name]">_<"[$component name]"> end_perm_act_<"[$t name]">_<"[$component name]">:* < spawn_<"[$y name]">_<"[$t name]">_<"[$component name]">:*
-
-<'}
-break}}
-break}
+	priority spawn_pr_<"[$t name]">_<"[$component name]"> end_perm_act_<"[$t name]">_<"[$component name]">:* < spawn_<"[$t name]">_<"[$component name]">:*
 	
-}
+<'}
 
 	foreach s [$t services] {
 	set test [list]

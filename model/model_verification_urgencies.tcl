@@ -367,18 +367,17 @@ atom type CONTROL_<"[$component name]">()
 	if {[$r kind]=="activity"} {'>
 	export port Port act_<"[$r name]">()<"\n"><'
 	} else {
-	set mut($counter) 0
+	set conflicts [$r mutex]
 	foreach c [$r codels] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {
-			set mut($counter) 1
-			break}}
-	if {[llength [$r mutex]] || $mut($counter) || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $r]])} {'>
+		if {[llength [$c mutex]]} {
+			lappend conflicts [$c mutex]}}
+	if {[llength $conflicts]} {'>
 	export port Port lock_res_<"[$r name]">()<"\n\t">export port Port unlock_res_<"[$r name]">()<"\n"><'
 	} else {'>
 	port Port exec_<"[$r name]">()<"\n"><'}}
 	if {[llength [$r validate]]} {'>
-	port Port valid_<"[$r name]">()<"\n\t"><'if {[$r kind]=="activity"} {'>export <'}'>port Port invalid_<"[$r name]">()<"\n"><'
-	if {[llength [[$r validate] mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen [$r validate]]])} {'>
+	port Port valid_<"[$r name]">()<"\n\t">export port Port invalid_<"[$r name]">()<"\n"><'
+	if {[llength [[$r validate] mutex]]} {'>
 	export port Port lock_res_<"[$r name]">_validate()<"\n\t">export port Port unlock_res_<"[$r name]">_validate()<"\n"><'
 	} else {'>
 	port Port <"[$r name]">_exe_validate()<"\n"><'}}
@@ -393,7 +392,11 @@ atom type CONTROL_<"[$component name]">()
 	if {[$r kind]=="activity"} {lappend invariants [join [list [$r name] ""] _] 0'><"[$r name]">_, <'
 	if {[llength [$r interrupts]]} {lappend invariants [join [list [$r name] "interrupt"] _] 0'><"[$r name]">_interrupt, <'} 
 	} else {'><"[$r name]">_, <'
-	if {[llength [$r mutex]] || $mut($counter) || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $r]])} {lappend invariants [join [list [$r name] "2"] _]
+	set conflicts [$r mutex]
+	foreach c [$r codels] {
+		if {[llength [$c mutex]]} {
+			lappend conflicts [$c mutex]}}
+	if {[llength $conflicts]} {lappend invariants [join [list [$r name] "2"] _]
 		if {![catch {$r wcet}]} {lappend invariants [expr [[$r wcet] value]*1000]
 			} else {lappend invariants 0}'> <"[$r name]">_2, <'
 		} else { lappend invariants [join [list [$r name] ""] _]
@@ -403,7 +406,7 @@ atom type CONTROL_<"[$component name]">()
 	if {[llength [$r validate]]} {lappend invariants [join [list [$r name] "validate" "2"] _]
 		if {![catch {[$r validate] wcet}]} {lappend invariants [expr [[[$r validate] wcet] value]*1000]
 			} else {lappend invariants 0}'><"[$r name]">_validate, <"[$r name]">_validate_2, <'
-	if {[llength [[$r validate] mutex]]|| ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen [$r validate]]])} {lappend invariants [join [list [$r name] "validate" "3"] _] 0'><"[$r name]">_validate_3, <'
+	if {[llength [[$r validate] mutex]]} {lappend invariants [join [list [$r name] "validate" "3"] _] 0'><"[$r name]">_validate_3, <'
 		} else {lappend invariants [join [list [$r name] "validate"] _] 0}}
 		
 	incr counter}'>free, release
@@ -419,7 +422,6 @@ atom type CONTROL_<"[$component name]">()
 	reset c
 	
 <'
-set counter 0
 foreach r $requests {'>
 	on req_<"[$r name]">
 	from idle to <"[$r name]">_<'
@@ -435,7 +437,7 @@ foreach r $requests {'>
 
 	
 <'if {[llength [$r validate]]} {
-	if {[llength [[$r validate] mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen [$r validate]]])} {'>
+	if {[llength [[$r validate] mutex]]} {'>
 	on lock_res_<"[$r name]">_validate
 	from <"[$r name]">_validate to <"[$r name]">_validate_2
 	eager
@@ -491,8 +493,11 @@ if {[$r kind]=="activity"} {
 	
 <'}
 } else {
+	set conflicts [$r mutex]
+	foreach c [$r codels] {
+	lappend conflicts [$c mutex]}
 if {[llength [$r interrupts]]} {
-	if {[llength [$r mutex]] || $mut($counter) || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $r]])} {'>
+	if {[llength $conflicts]} {'>
 	on lock_res_<"[$r name]">
 	from <"[$r name]">_ to <"[$r name]">_2
 	eager
@@ -517,7 +522,7 @@ if {[llength [$r interrupts]]} {
 
 	
 <'} else {
-	if {[llength [$r mutex]] || $mut($counter) || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $r]])} {'>
+	if {[llength $conflicts]} {'>
 	on lock_res_<"[$r name]">
 	from <"[$r name]">_ to <"[$r name]">_2
 	eager
@@ -573,6 +578,7 @@ end
 
 
 <'set counter 0
+set flagports 0
 set permanent [list]
 foreach t [$component tasks] {
 	set nostopt($counter) [list]
@@ -585,17 +591,12 @@ foreach t [$component tasks] {
 
 atom type TIMER_<"[$t name]">_<"[$component name]">()
 	clock c
-	export port Port init()
 	export port Port tick()
 	export port Port restart()
 
-	place idle, start, test
+	place start, test
 
-	initial to idle
-	
-	on init
-	from idle to start
-	reset c
+	initial to start
 
 	on tick
 	from start to test
@@ -619,23 +620,21 @@ lappend permanent $t
 
 atom type PERM_<"[$t name]">_<"[$component name]">()
 	clock c
-	
-<'if {$t != [lindex [$component tasks] 0]} {'>export <'}'>port Port begin()<'
 
-set test [list]
+<'set test [list]
 set startyields [list]
 	foreach c [$t codels] {
 		foreach tr [$c triggers] {
 	if {[$tr name]=="start"} {
 		foreach y [$c yields] {
-		lappend startyields $y}
+		lappend startyields $y}'>
+		
+		
+<'if {$t != [lindex [$component tasks] 0]} {'>export <'}'>port Port begin()<'
 	} else {'><"\n\t"><'
 		if {$tr in $startyields} {'>export <'}'>port Port to_<"[$tr name]">()<"\n"><'}
 			 
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
-	
-	export port Port lock_res_<"[$c name]">()<"\n\t">export port Port unlock_res_<"[$c name]">()<"\n"><'}}
-	if {!([llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]))} {'>
+	if {!([llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]])} {'>
 	port Port to_<"[$tr name]">_test()<"\n"><'}
 		foreach y [$c yields] {
 			if {[$y kind] == "pause event"} {
@@ -643,10 +642,14 @@ set startyields [list]
 				lappend test [$y name]
 				if {$y in $startyields} {
 				lappend resumepermstart($counter) [$y name]}}}}
+	if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {
+		if {!$flagports && [llength [mutex-ports-basic dotgen $c]]} {set flagports 1}'>
+	
+	export port Port lock_res_<"[$c name]">()<"\n\t">export port Port unlock_res_<"[$c name]">()<"\n"><'}}
 	if {[llength $test]} {
 	set resumeperm($counter) $test'>
 	
-	export port Port resume_()<"\n"><'
+	export port Port resume_<"\n"><'
 	foreach te $test {'>
 	export port Port to_pause_<"$te">()<"\n"><'}}'>
 	
@@ -658,7 +661,7 @@ set startyields [list]
 	set invariants [list]
 	foreach c [$t codels] {
 		foreach tr [$c triggers] {lappend invariants [join [list [$tr name] "test"] _] 0'>, <"[$tr name]">_, <"[$tr name]">_test<'
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {lappend invariants [join [list [$tr name] "2"] _]
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {lappend invariants [join [list [$tr name] "2"] _]
 			if {![catch {$c wcet}]} {lappend invariants [expr [[$c wcet] value]*1000]
 			} else {lappend invariants 0}'>, <"[$tr name]">_2<'
 		} else {
@@ -674,11 +677,9 @@ foreach te $test {'>, pause_<"$te"><'}'>, ether_
 	from idle to start_ // spawning <"[$t name]">
 	reset c
 
-<'
-set genpause [list]
-foreach c [$t codels] {
+<'foreach c [$t codels] {
 		foreach tr [$c triggers] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
 				
 	on lock_res_<"[$c name]">
 	from <"[$tr name]">_ to <"[$tr name]">_2
@@ -706,12 +707,10 @@ foreach y [$c yields] {
 	on to_pause_<"[$y name]">
 	from <"[$tr name]">_test to pause_<"[$y name]">
 
-<'if {!($y in $genpause)} {'> 	
+	
 	on resume_
 	from pause_<"[$y name]"> to <"[$y name]">_
 	reset c
-
-<'lappend genpause $y}'>
 	
 <'} else {'>
 	
@@ -875,11 +874,12 @@ atom type SERVICE_<"[$s name]">_<"[$component name]">()
 	
 	set test [list]
 	foreach c [$s codels] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {
+		if {!$flagports && [llength [mutex-ports-basic dotgen $c]]} {set flagports 1}'>
 	export port Port lock_res_<"[$c name]">()<"\n\t">export port Port unlock_res_<"[$c name]">()<"\n"><'}
 		foreach tr [$c triggers] {
 	
-	if {!([llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]))} {'>
+	if {!([llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]])} {'>
 	port Port to_<"[$tr name]">_test()<"\n"><'}}
 		foreach y [$c yields] {
 			if {[$y kind] == "pause event"} {
@@ -899,7 +899,7 @@ atom type SERVICE_<"[$s name]">_<"[$component name]">()
 	set invariants [list]
 	foreach c [$s codels] {
 		foreach tr [$c triggers] {lappend invariants [join [list [$tr name] "test"] _] 0'>, <"[$tr name]">_, <"[$tr name]">_test<'
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {lappend invariants [join [list [$tr name] "2"] _]
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {lappend invariants [join [list [$tr name] "2"] _]
 			if {![catch {$c wcet}]} {lappend invariants [expr [[$c wcet] value]*1000]
 			} else {lappend invariants 0}'>, <"[$tr name]">_2<'
 			} else {
@@ -928,12 +928,10 @@ atom type SERVICE_<"[$s name]">_<"[$component name]">()
 	
 	
 <'}
-set genpause [list]
-set stpause [list]
 
 foreach c [$s codels] {
 		foreach tr [$c triggers] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
 				
 	on lock_res_<"[$c name]">
 	from <"[$tr name]">_ to <"[$tr name]">_2
@@ -961,14 +959,12 @@ foreach c [$s codels] {
 	on to_pause_<"[$y name]">
 	from <"[$tr name]">_test to pause_<"[$y name]">
 
-<'if {!($y in $genpause)} {'>	
+	
 	on resume_
 	from pause_<"[$y name]"> to <"[$y name]">_
 	reset c
-
-<'lappend genpause $y<'}'>
-
-<'if {!($y in $stpause)} {'>
+	
+	
 <'if {[$s name] in $nostop} {'>
 	
 	on interrupted
@@ -981,7 +977,6 @@ foreach c [$s codels] {
 	reset c
 	
 <'}
-lappend stpause $y}
 	
 } else {
 	
@@ -1038,7 +1033,8 @@ end
 
 /* module */
 
-compound type <"[$component name]">()
+compound type <"[$component name]"><'
+if {[llength [dotgen components]] ==1 && $flagports} {'>_<'}'>()
 
 	component CLIENT_<"[$component name]"> client_<"[$component name]">()
 	component CONTROL_<"[$component name]"> control_<"[$component name]">()
@@ -1050,12 +1046,7 @@ foreach t [$component tasks] {'>
 	
 	
 	component MANAGER_<"[$t name]">_<"[$component name]"> manager_<"[$t name]">_<"[$component name]">()
-
-<'if {![catch {$t period}]} {'>
-	
 	component TIMER_<"[$t name]">_<"[$component name]"> timer_<"[$t name]">_<"[$component name]">()
-
-<'}'>
 	
 <'if {[llength [$t codels]]} {'>		
 	component PERM_<"[$t name]">_<"[$component name]"> perm_<"[$t name]">_<"[$component name]">()<'}
@@ -1064,33 +1055,29 @@ foreach s [$t services] {'>
 	component SERVICE_<"[$s name]">_<"[$component name]"> <"[$s name]">_<"[$component name]">_inst_1(), <"[$s name]">_<"[$component name]">_inst_2()<'}}'>
 
 	
-<'if {[llength $activities]} {'>
-	
 	component STATUS <'
 	foreach a $activities {'><"[$a name]">_<"[$component name]">_status_1(), <"[$a name]">_<"[$component name]">_status_2()<'
-		if {$a != [lindex $activities end]} {'>, <'}}}
+		if {$a != [lindex $activities end]} {'>, <'}}
 		
 		set mutex($gcounter) [list]
 		foreach r $requests {
 				foreach c [$r validate] {
-					if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {
-						lappend mutex($gcounter) [join [list "val" [$r name] "lk" [$component name]] _]}}
+					if {[llength [$c mutex]]} {
+						lappend mutex($gcounter) [join [list "validate" [$r name] [$component name]] _]}}
 				if {[$r kind] == "activity"} {
 				foreach c [$r codels] {
-					if {[llength [$c mutex]]  || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {
-						lappend mutex($gcounter) [join [list [$c name] [$r name] "lk" [$component name]] _]}}
+					if {[llength [$c mutex]]  || [llength [mutex-ports-basic dotgen $c]]} {
+						lappend mutex($gcounter) [join [list "lock" [$c name] [$r name] [$component name]] _]}}
 					} else {
-					if {[llength [$r mutex]]  || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $r]])} {
-						lappend mutex($gcounter) [join [list  [$r kind] [$r name] "lk" [$component name]] _]
-					} else {
-					foreach c [$r codels] {
-					if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {
-						lappend mutex($gcounter) [join [list  [$r kind] [$r name] "lk" [$component name]] _]
-						break}}}
+					set conflicts [$r mutex]
+					foreach c [$r codels] {lappend conflicts [$c mutex]}
+					if {[llength $conflicts]} {
+						lappend mutex($gcounter) [join [list "lock" [$r name] [$component name]] _]}
+					
 				}}
 		foreach t [$component tasks] {
 			foreach c [$t codels] {
-				if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {lappend mutex($gcounter) [join [list [$c name] [$t name] "lk" [$component name]] _]}}}
+				if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {lappend mutex($gcounter) [join [list "lock" [$c name] [$t name] [$component name]] _]}}}
 				
 		if {[llength $mutex($gcounter)]} {'>		
 			
@@ -1128,52 +1115,20 @@ foreach p $permanent {'>
 	
 /* <"[$p name]"> */
 
-<'	if {$p == [lindex $permanent 0]} {'>
-
-	
-
-connector <'if {![catch {$p period}]} {'>sync2<'
-
-} else {'>singleton<'}'> begin_spawn_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.begin
-
-<'	    if {![catch {$p period}]} {'>, timer_<"[$p name]">_<"[$component name]">.init<'}'>)
-
-<'}	
-
-	foreach c [$p codels] {
-
-	    foreach tr [$c triggers] {
-
+<'foreach c [$p codels] {
+	foreach tr [$c triggers] {
 		if {[$tr name] == "start"} {
+			foreach y [$c yields] {'>
+		
+	connector trig2 spawn_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.to_<'
+	if {[$y kind] == "pause event"} {'>pause_<'}'><"[$y name]">, <'
+	if {$p == [lindex $permanent end]} {'>ready_<"[$component name]">.block<'
+	} else {'>perm_<"[[lindex $permanent [expr $index+1]] name]">_<"[$component name]">.begin<'}'>)
 
-		    foreach y [$c yields] {'>
-
-connector <'
-
-if {[$y kind] == "pause event"} {'>sync<'
-
-} else {'>trig<'}'>
-
-<'			if {$p == [lindex $permanent end] || [catch {[lindex $permanent [expr $index+1]] period}]} {'>2<'
-
-			} else {'>3<'}'> spawn_<"[$y name]">_<"[$p name]">_<"[$component name]">(perm_<"[$p name]">_<"[$component name]">.to_<'
-
-			if {[$y kind] == "pause event"} {'>pause_<'}'><"[$y name]">, <'
-
-			if {$p == [lindex $permanent end]} {'>ready_<"[$component name]">.block<'
-
-			} else {'>perm_<"[[lindex $permanent [expr $index+1]] name]">_<"[$component name]">.begin<'
-
-			    if {![catch {[lindex $permanent [expr $index+1]] period}]} {'>, timer_<"[[lindex $permanent [expr $index+1]] name]">_<"[$component name]">.init<'}}'>)
-
-<'		    }
-
-		    break}}
-
-	    break}
-
-	incr index}}
-
+<'}
+break}}
+break}
+incr index}}
 
 set counter 0
 foreach t [$component tasks] {
@@ -1181,8 +1136,7 @@ foreach t [$component tasks] {
 	
 /* signal end of activities (or not) */
 	
-	connector trig<'if {![catch {$t period}]} {'>3<'
-		} else {'>2<'}'> end_<"[$t name]">_<"[$component name]">(manager_<"[$t name]">_<"[$component name]">.ended, signal_<"[$t name]">_<"[$component name]">.hold<'if {![catch {$t period}]} {'>, timer_<"[$t name]">_<"[$component name]">.restart<'}'>)
+	connector trig3 end_<"[$t name]">_<"[$component name]">(manager_<"[$t name]">_<"[$component name]">.ended, timer_<"[$t name]">_<"[$component name]">.restart, signal_<"[$t name]">_<"[$component name]">.hold)
 	
 /* report end of activities */
 
@@ -1223,7 +1177,7 @@ if {[llength [$t codels]]} {'>
 foreach y $resumeperm($counter) {
 	if {!($y in $resumepermstart($counter))} {'>
 		
-	connector trig2 pause_perm_act_<"$y">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.to_pause_<"$y">, manager_<"[$t name]">_<"[$component name]">.cycle_perm)
+	connector sync2 pause_perm_act_<"$y">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.to_pause_<"$y">, manager_<"[$t name]">_<"[$component name]">.cycle_perm)
 	
 <'}}}}
 
@@ -1373,134 +1327,111 @@ if {[llength $mutex($gcounter)]} {'>
 set exports [list]
 foreach t [$component tasks] {
 	foreach c [$t codels] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
 			
 /* <"[$t name]"> permanent activity. codel <"[$c name]"> */
 
 
 	connector sync<"[expr [llength [$c mutex]]+2]"><'
-	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "take" "res" [$c name] [$t name] [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.lock_res_<"[$c name]">, <"[$c name]">_<"[$t name]">_lk_<"[$component name]">.take<'
-	foreach m [$c mutex] {
+	if {[llength [mutex-ports-basic dotgen $c]]} {
+	lappend exports [join [list "take" "res" [$c name] [$t name] [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.lock_res_<"[$c name]">, lock_<"[$c name]">_<"[$t name]">_<"[$component name]">.take<'
+	foreach m [$c mutex] {'>, lock_<'
 		if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
+			if {$m == [[$m service] validate]} {'>validate_<'
 			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+				if {[[$m service] kind] == "activity"} {'><"[$m name]">_<'
+					}}'><"[[$m service] name]"><'
 		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}'>)
+			if {![catch {$m task}]} {'><"[$m name]">_<"[[$m task] name]"><'
+			} else {'><"[$m name]"><'}}'>_<"[$component name]">.check<'}'>)
 	
 	connector sync2<'
-	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "give" "res" [$c name] [$t name] [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.unlock_res_<"[$c name]">, <"[$c name]">_<"[$t name]">_lk_<"[$component name]">.give)
+	if {[llength [mutex-ports-basic dotgen $c]]} {
+	lappend exports [join [list "give" "res" [$c name] [$t name] [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$t name]">_<"[$component name]">(perm_<"[$t name]">_<"[$component name]">.unlock_res_<"[$c name]">, lock_<"[$c name]">_<"[$t name]">_<"[$component name]">.give)
 
 <'}}}
 
 foreach r $requests {
-		foreach v [$r validate] {
-			if {[llength [$v mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $v]])} {'>
+		foreach c [$r validate] {
+			if {[llength [$c mutex]]} {'>
 				
 /* <"[$r name]"> validation codel */
 				
 	
-	connector sync<"[expr [llength [$v mutex]]+2]"><'
-	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $v]]} {
-	lappend exports [join [list "take" "res" [$v name] [$r name] [$component name]] _]'>_exp<'}'> take_res_<"[$v name]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.lock_res_<"[$r name]">_validate, val_<"[$r name]">_lk_<"[$component name]">.take<'
-	foreach m [$v mutex] {
+	connector sync<"[expr [llength [$c mutex]]+2]"> take_res_<"[$c name]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.lock_res_<"[$r name]">_validate, validate_<"[$r name]">_<"[$component name]">.take<'
+	foreach m [$c mutex] {'>, lock_<'
 		if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
+			if {$m == [[$m service] validate]} {'>validate_<'
 			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+				if {[[$m service] kind] == "activity"} {'><"[$m name]">_<'
+					}}'><"[[$m service] name]"><'
 		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}'>)
+			if {![catch {$m task}]} {'><"[$m name]">_<"[[$m task] name]"><'
+			} else {'><"[$m name]"><'}}'>_<"[$component name]">.check<'}'>)
 		
-	connector sync2<'
-	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $v]]} {
-	lappend exports [join [list "give" "res" [$v name] [$r name] [$component name]] _]'>_exp<'}'> give_res_<"[$v name]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.unlock_res_<"[$r name]">_validate, val_<"[$r name]">_lk_<"[$component name]">.give)
+	connector sync2 give_res_<"[$c name]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.unlock_res_<"[$r name]">_validate, val_<"[$r name]">_lk_<"[$component name]">.give)
 		
 <'}}
 if {[$r kind] == "activity"} {
 foreach c [$r codels] {
-		if {[llength [$c mutex]] || ([llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]])} {'>
+		if {[llength [$c mutex]] || [llength [mutex-ports-basic dotgen $c]]} {'>
 			
 /* codel <"[$c name]"> service <"[$r name]"> */
 	
 	
 	connector sync<"[expr [llength [$c mutex]]+2]"><'
 	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "take" "res" [$c name] [$r name] "1" [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$r name]">_1_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_1.lock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"[$component name]">.take<'
-	foreach m [$c mutex] {
+	lappend exports [join [list "take" "res" [$c name] [$r name] "1" [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$r name]">_1_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_1.lock_res_<"[$c name]">, lock_<"[$c name]">_<"[$r name]">_<"[$component name]">.take<'
+	foreach m [$c mutex] {'>, lock_<'
 		if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
+			if {$m == [[$m service] validate]} {'>validate_<'
 			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+				if {[[$m service] kind] == "activity"} {'><"[$m name]">_<'
+					}}'><"[[$m service] name]"><'
 		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}'>)
+			if {![catch {$m task}]} {'><"[$m name]">_<"[[$m task] name]"><'
+			} else {'><"[$m name]"><'}}'>_<"[$component name]">.check<'}'>)
 		
 	connector sync<"[expr [llength [$c mutex]]+2]"><'
 	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "take" "res" [$c name] [$r name] "2" [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$r name]">_2_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_2.lock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"[$component name]">.take<'
-	foreach m [$c mutex] {
+	lappend exports [join [list "take" "res" [$c name] [$r name] "2" [$component name]] _]'>_exp<'}'> take_res_<"[$c name]">_<"[$r name]">_2_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_2.lock_res_<"[$c name]">, lock_<"[$c name]">_<"[$r name]">_<"[$component name]">.take<'
+	foreach m [$c mutex] {'>, lock_<'
 		if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
+			if {$m == [[$m service] validate]} {'>validate_<'
 			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+				if {[[$m service] kind] == "activity"} {'><"[$m name]">_<'
+					}}'><"[[$m service] name]"><'
 		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}'>)
+			if {![catch {$m task}]} {'><"[$m name]">_<"[[$m task] name]"><'
+			} else {'><"[$m name]"><'}}'>_<"[$component name]">.check<'}'>)
 		
 	connector sync2<'
 	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "give" "res" [$c name] [$r name] "1" [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$r name]">_1_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_1.unlock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"[$component name]">.give)
+	lappend exports [join [list "give" "res" [$c name] [$r name] "1" [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$r name]">_1_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_1.unlock_res_<"[$c name]">, lock_<"[$c name]">_<"[$r name]">_<"[$component name]">.give)
 		
 	connector sync2<'
 	if {[llength [dotgen component]]>1 && [llength [mutex-ports dotgen $c]]} {
-	lappend exports [join [list "give" "res" [$c name] [$r name] "2" [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$r name]">_2_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_2.unlock_res_<"[$c name]">, <"[$c name]">_<"[$r name]">_lk_<"[$component name]">.give)
+	lappend exports [join [list "give" "res" [$c name] [$r name] "2" [$component name]] _]'>_exp<'}'> give_res_<"[$c name]">_<"[$r name]">_2_<"[$component name]">(<"[$r name]">_<"[$component name]">_inst_2.unlock_res_<"[$c name]">, lock_<"[$c name]">_<"[$r name]">_<"[$component name]">.give)
 		
 <'}}
 } else {
-	set test [join [list  [$r kind] [$r name] "lk" [$component name]] _]
+	set test [join [list "lock" [$r name] [$component name]] _]
 	if {$test in $mutex($gcounter)} {
-		
-		set mutport [mutex-ports dotgen $r]
-		set length [llength [$r mutex]]
-	foreach c [$r codels] {
-		if {[llength $mutport] < [llength [mutex-ports dotgen $c]]} {
-					set mutport [mutex-ports dotgen $c]}
-		if {[llength [$c mutex]]} {incr length [llength [$c mutex]]}}'>
+		set conflicts [$r mutex]
+		foreach c [$r codels] {lappend conflicts [$c mutex]}'>
 	
-	connector sync<"[expr $length+2]"><'
-	if {[llength [dotgen component]]>1 && [llength $mutport]} {
-	lappend exports [join [list "take" "res" [$r kind] [$r name] [$component name]] _]'>_exp<'}'> take_res_<"[$r kind]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.lock_res_<"[$r name]">, <"[$r kind]">_<"[$r name]">_lk_<"[$component name]">.take<'
-	foreach m [$r mutex] {
+	connector sync<"[expr [llength $conflicts]+2]"> take_res_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.lock_res_<"[$r name]">, lock_<"[$r name]">_<"[$component name]">.take<'
+	foreach m $conflicts {'>, lock_<'
 		if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
+			if {$m == [[$m service] validate]} {'>validate_<'
 			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
+				if {[[$m service] kind] == "activity"} {'><"[$m name]">_<'
+					}}'><"[[$m service] name]"><'
 		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}
-	foreach c [$r codels] {
-		foreach m [$c mutex] {
-			if {![catch {$m service}]} {
-			if {$m == [[$m service] validate]} {'>, val<'
-			} else {
-				if {[[$m service] kind] == "activity"} {'>, <"[$m name]"><'
-					} else {'>, <"[[$m service] kind]"><'}}'>_<"[[$m service] name]">_lk<'
-		} else {
-			if {![catch {$m task}]} {'>, <"[$m name]">_<"[[$m task] name]">_lk<'
-			} else {'>, <"[$m kind]">_<"[$m name]">_lk<'}}'>_<"[$component name]">.check<'}}'>)
+			if {![catch {$m task}]} {'><"[$m name]">_<"[[$m task] name]"><'
+			} else {'><"[$m name]"><'}}'>_<"[$component name]">.check<'}'>)
 		
-	connector sync2<'
-	if {[llength [dotgen component]]>1 && [llength $mutport]} {
-	lappend exports [join [list "give" "res" [$r kind] [$r name] [$component name]] _]'>_exp<'}'> give_res_<"[$r kind]">_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.unlock_res_<"[$r name]">, <"[$r kind]">_<"[$r name]">_lk_<"[$component name]">.give)
+	connector sync2 give_res_<"[$r name]">_<"[$component name]">(control_<"[$component name]">.unlock_res_<"[$r name]">, lock_<"[$r name]">_<"[$component name]">.give)
 	
 <'}}}'>
 
@@ -1513,24 +1444,9 @@ foreach t [$component tasks] {
 		
 /* spawn */
 
-		<' foreach c [$t codels] {
-
-	foreach tr [$c triggers] {
-
-	if {[$tr name] == "start"} { 
-
-	foreach y [$c yields] {'>
-
-	priority spawn_pr_<"[$y name]">_<"[$t name]">_<"[$component name]"> end_perm_act_<"[$t name]">_<"[$component name]">:* < spawn_<"[$y name]">_<"[$t name]">_<"[$component name]">:*
-
-<'}
-
-break}}
-
-break}
-
+	priority spawn_pr_<"[$t name]">_<"[$component name]"> end_perm_act_<"[$t name]">_<"[$component name]">:* < spawn_<"[$t name]">_<"[$component name]">:*
 	
-}
+<'}
 
 	foreach s [$t services] {
 	set test [list]
@@ -1577,9 +1493,9 @@ end<'
 
 incr gcounter}
 
-if {[llength [dotgen components]]>1} {'>
+if {[llength [dotgen components]]>1 || ([llength [dotgen components]]==1 && $flagports)} {'>
 	
-/* all modules */
+/* modules & ports */
 	
 compound type <'
 foreach component [dotgen components] {'><"[$component name]"><'
@@ -1604,19 +1520,19 @@ foreach component [dotgen components] {'><"[$component name]"><'
 foreach comp [dotgen component] {
 	foreach t [$comp tasks] {
 		foreach c [$t codels] {
-			set test [join [list [$c name] [$t name] "lk" [$comp name]] _]
+			set test [join [list "lock" [$c name] [$t name] [$comp name]] _]
 			if {$test in $mutex($gcounter) && [llength [mutex-ports dotgen $c]]} {'>
 				
 		connector sync<"[expr [llength [mutex-ports dotgen $c]]+1]"> take_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_ports(<"[$comp name]">_.take_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_<'
 		foreach p [mutex-ports dotgen $c] {'>, <"[lindex $p 2]">_<"[lindex $p 3]">.take<'}'>)
 		
-		connector sync<"[expr [llength [mutex-ports dotgen $c]]+1]"> give_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_ports(<"[$comp name]">_.give_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_<'
+		connector sync<"[expr [llength [mutex-ports dotgen $c]]+1]]"> give_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_ports(<"[$comp name]">_.give_res_<"[$c name]">_<"[$t name]">_<"[$comp name]">_<'
 		foreach p [mutex-ports dotgen $c] {'>, <"[lindex $p 2]">_<"[lindex $p 3]">.give<'}'>)
 
 <'}}
 	foreach s [$t services] {
 		foreach c [$s codels] {
-				set test [join [list [$c name] [$s name] "lk" [$comp name]] _]
+				set test [join [list "lock" [$c name] [$s name] [$comp name]] _]
 				if {$test in $mutex($gcounter) && [llength [mutex-ports dotgen $c]]} {'>
 		connector sync<"[expr [llength [mutex-ports dotgen $c]]+1]"> take_res_<"[$c name]">_<"[$s name]">_<"[$comp name]">_ports_1(<"[$comp name]">_.take_res_<"[$c name]">_<"[$s name]">_1_<"[$comp name]">_<'
 		foreach p [mutex-ports dotgen $c] {'>, <"[lindex $p 2]">_<"[lindex $p 3]">.take<'}'>)	
@@ -1632,23 +1548,7 @@ foreach comp [dotgen component] {
 		
 <'}}}}
 
-foreach s [$comp services] {
-	if {[$s kind] != "activity"} {
-		set test [join [list  [$r kind] [$r name] "lk" [$comp name]] _]
-		if {$test in $mutex($gcounter)} {
-			set mutport [mutex-ports dotgen $s]
-			foreach c [$s codels] {
-				if {[llength $mutport] < [llength [mutex-ports dotgen $c]]} {
-					set mutport [mutex-ports dotgen $c]}}
-			if {[llength $mutport]} {'>
-		
-		connector sync<"[expr [[llength $mutport]]+1]"> take_res_<"[$s name]">_<"[$comp name]">_ports(<"[$comp name]">_.take_res_<"[$s kind]">_<"[$s name]">_<"[$comp name]">_<'
-		foreach p $mutport {'>, <"[lindex $p 2]">_<"[lindex $p 3]">.take<'}'>)	
-		
-		connector sync<"[expr [[llength $mutport]]+1]"> give_res_<"[$s name]">_<"[$comp name]">_ports(<"[$comp name]">_.give_res_<"[$s kind]">_<"[$s name]">_<"[$comp name]">_<'
-		foreach p $mutport {'>, <"[lindex $p 2]">_<"[lindex $p 3]">.give<'}'>)
-		
-<'}}}}
+
 incr gcounter}'>
 
 end
