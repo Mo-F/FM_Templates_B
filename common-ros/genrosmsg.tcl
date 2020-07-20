@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011-2014 LAAS/CNRS
+# Copyright (c) 2011-2014,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Permission to use, copy, modify, and distribute this software for any purpose
@@ -18,7 +18,7 @@
 #
 
 global rosmsg_done
-set rosmsg_done [dict create]
+#set rosmsg_done [dict create]
 
 
 # --- rosmsg_cname ---------------------------------------------------------
@@ -66,17 +66,16 @@ proc rosmsg_field { type } {
       append m "\[[$type length]\]"
     }
 
-    sequence - optional		{
+    sequence - optional - {union member} {
       set m [rosmsg_field [$type type]]
       append m "\[\]"
     }
 
-    typedef - struct - exception {
+    typedef - struct - union - exception {
       set m [rosmsg_cname $type]
     }
 
-    {struct member} -
-    {union member}		{
+    {struct member}		{
       set m [rosmsg_field [$type type]]
     }
 
@@ -113,6 +112,16 @@ proc rosmsg_struct { type } {
   return $m
 }
 
+proc rosmsg_union { type } {
+  set m "# IDL union [$type fullname]\n"
+  append m "[rosmsg_field [$type discriminator]] d\n"
+  foreach e [$type members] {
+    append m "[rosmsg_field $e] u_[$e name]\n"
+  }
+
+  return $m
+}
+
 proc rosmsg_exception { type } {
   set m "# IDL exception detail [$type fullname]\n"
   foreach e [$type members] {
@@ -140,6 +149,7 @@ proc rosmsg { type } {
   switch -- [$type kind] {
     {enum}	{ return [rosmsg_enum $type] }
     {struct}	{ return [rosmsg_struct $type] }
+    {union}	{ return [rosmsg_union $type] }
     {exception}	{ return [rosmsg_exception $type] }
     {typedef}	{ return [rosmsg_typedef $type] }
   }
@@ -182,7 +192,7 @@ proc rossrv { service } {
 #
 # Generate .msg source for all $types
 #
-proc genrosmsg { types } {
+proc genrosmsg { comp types } {
   global rosmsg_done
 
   foreach type $types {
@@ -195,14 +205,20 @@ proc genrosmsg { types } {
     switch -- [$type kind] {
       enum {}
       typedef {
-        genrosmsg [$type type]
+        genrosmsg $comp [$type type]
       }
-      struct - union - exception {
-        foreach m [$type members] { genrosmsg [$m type] }
+
+      struct - exception {
+        foreach m [$type members] { genrosmsg $comp [$m type] }
+      }
+
+      union {
+        genrosmsg $comp [$type discriminator]
+        foreach m [$type members] { genrosmsg $comp [$m type] }
       }
 
       array - sequence - optional {
-        genrosmsg [$type type]
+        genrosmsg $comp [$type type]
         continue
       }
       default continue
@@ -210,7 +226,7 @@ proc genrosmsg { types } {
 
     set m [rosmsg $type]
     template parse raw $m \
-        file [[dotgen component] name]/msg/[rosmsg_cname $type].msg
+        file [$comp name]/msg/[rosmsg_cname $type].msg
     dict set rosmsg_done $type 1
   }
 

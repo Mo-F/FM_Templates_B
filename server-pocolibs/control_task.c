@@ -70,7 +70,7 @@ genom_<"$comp">_init(void)
   /* create internal data structure */
   self = malloc(sizeof(*self));
   if (!self) {
-    genom_log_warn(1, "cannot create internal data structure");
+    genom_<"$comp">_log_warn(1, "cannot create internal data structure");
     return NULL;
   }
 
@@ -86,8 +86,8 @@ genom_<"$comp">_init(void)
 <'}'>
 <'foreach t [$component tasks] { '>
 
-  self->tasks.<"[$t name]">.context.raise = genom_pocolibs_raise;
-  self->tasks.<"[$t name]">.context.raised = genom_pocolibs_raised;
+  self->tasks.<"[$t name]">.context.raise = genom_<"$comp">_pocolibs_raise;
+  self->tasks.<"[$t name]">.context.raised = genom_<"$comp">_pocolibs_raised;
   self->tasks.<"[$t name]">.context.data =
     &self->tasks.<"[$t name]">.context_data;
 
@@ -112,8 +112,8 @@ genom_<"$comp">_init(void)
 
 <'}'>
 
-  self->control.context.raise = genom_pocolibs_raise;
-  self->control.context.raised = genom_pocolibs_raised;
+  self->control.context.raise = genom_<"$comp">_pocolibs_raise;
+  self->control.context.raised = genom_<"$comp">_pocolibs_raised;
 
   self->control.context.data = &self->control.context_data;
   self->control.context_data.self = self;
@@ -124,7 +124,7 @@ genom_<"$comp">_init(void)
   self->control.bip_event_port = NULL;	/* This is a pointer on the BIP event port. */
 
   snprintf(self->control.mbox_name, sizeof(self->control.mbox_name),
-           "%s", genom_instance);
+           "%s", <"$comp">_genom_instance);
   self->control.csserv = NULL;
 
   int i;
@@ -143,7 +143,7 @@ genom_<"$comp">_init(void)
   if (genom_<"$comp">_genom_metadata_write(&self->control.context)) goto error;
   if (genom_<"$comp">_genom_state_write(&self->control.context)) goto error;
 
-  genom_log_info("setup and running");
+  genom_<"$comp">_log_info("setup and running");
 
   <"$comp">_genom_component = self;
 
@@ -177,7 +177,7 @@ genom_<"$comp">_fini(void *data) /* this will be modeled in bip... */
   genom_tfini_<"[$ids mangle]">(&self->ids);
 <'}'>
   free(self);
-  genom_log_info("shutdown complete");
+  genom_<"$comp">_log_info("shutdown complete");
 }
 
 
@@ -191,13 +191,13 @@ void
   char tname[64];
 
   /* make the thread a pocolibs task. This is required to use mailboxes from a thread. */
-  snprintf(tname, sizeof(tname), "%s-bep", genom_instance); /* bep for BIP Event Port */
-  genom_log_info("Calling taskFromThread from <"$comp">_cntrl_task_init (Event Port thread).");
+  snprintf(tname, sizeof(tname), "%s-bep", <"$comp">_genom_instance); /* bep for BIP Event Port */
+  genom_<"$comp">_log_info("Calling taskFromThread from <"$comp">_cntrl_task_init (Event Port thread).");
   taskFromThread(tname);
   
   /* create requests reception mailbox */
   if (csMboxInit(self->control.mbox_name, <"$COMP">_MBOX_RQST_SIZE, 0) != OK) {
-    genom_log_warn(1, "cannot create server mailbox");
+    genom_<"$comp">_log_warn(1, "cannot create server mailbox");
     return;
   }
 
@@ -207,7 +207,7 @@ void
 	<"$COMP">_MAX_REPLY_SIZE >= <"$COMP">_MAX_INTERMED_REPLY_SIZE ?
 	<"$COMP">_MAX_REPLY_SIZE : <"$COMP">_MAX_INTERMED_REPLY_SIZE,
 	<"$COMP">_NRQSTID, &serv_ids) != OK) {
-    genom_log_warn(1, "cannot initialize server mailbox");
+    genom_<"$comp">_log_warn(1, "cannot initialize server mailbox");
     goto error;
   }
   /* fiddle with returned CS_SERV structure, to store ids for callbacks */
@@ -219,14 +219,14 @@ void
 <'foreach s [$component services] {'>
   if (csServFuncInstall(serv_ids, <"$COMP">_<"[$s name]">_RQSTID,
                         (FUNCPTR)<"$comp">_<"[$s name]">_rqstcb) != OK) {
-    genom_log_warn(1, "cannot serve service <"[$s name]">");
+    genom_<"$comp">_log_warn(1, "cannot serve service <"[$s name]">");
     goto error;
   }
 <'}'>
 
   self->control.csserv = serv_ids; /* This is to make sure that all the initialization are done  */
 
-  genom_log_info("inited control task");
+  genom_<"$comp">_log_info("inited control task");
   /* For BIP, at this point, the control task is ready to be run. */
   return;
 
@@ -248,28 +248,28 @@ BIP_<"$comp">_cntrl_task_check_event(void *data) /* This is the function which s
   if (! self) return NULL;	/* if the component has not been created yet, we just return. */
   if (! self->control.csserv) return NULL; /* the CS server has not been created yet. */
 
-  genom_log_debug("Checking MBOX status from BIP.");
+  genom_<"$comp">_log_debug("Checking MBOX status from BIP.");
 
   self->control.bip_event_port = data;	/* data is a pointer on the BIP port. No need to do it each time, but simpler to code... */
 
   /* read reception mailbox status and sleep if there is no message */
   e = csMboxStatus(RCV_MBOX);
-  genom_log_debug("csMboxStatus returned %d.", e);
+  genom_<"$comp">_log_debug("csMboxStatus returned %d.", e);
   switch(e) {
   case 0: /* no message */
     /* update state port before sleeping */
-    genom_log_debug("calling genom_state_<"$comp">_refresh.");
+    genom_<"$comp">_log_debug("calling genom_state_<"$comp">_refresh.");
     genom_state_<"$comp">_refresh(self);
 
-    genom_log_debug("calling h2evnSusp.");
+    genom_<"$comp">_log_debug("calling h2evnSusp.");
     e = h2evnSusp(0);
-    genom_log_debug("h2evnSusp returned %d.", e);
+    genom_<"$comp">_log_debug("h2evnSusp returned %d.", e);
     if (e != TRUE) {
-      genom_log_warn(1, "someone did something nasty");
-      genom_log_warn(0, "aborting");
+      genom_<"$comp">_log_warn(1, "someone did something nasty");
+      genom_<"$comp">_log_warn(0, "aborting");
       abort();
     }
-    genom_log_debug("control task wake up");
+    genom_<"$comp">_log_debug("control task wake up");
 
     /* update reception mailbox status */
     e = csMboxStatus(RCV_MBOX);
@@ -277,18 +277,18 @@ BIP_<"$comp">_cntrl_task_check_event(void *data) /* This is the function which s
 
     /*FALLTHROUGH*/
   case RCV_MBOX: /* incoming request */
-    genom_log_debug("csMboxStatus incoming request.");
+    genom_<"$comp">_log_debug("csMboxStatus incoming request.");
     if (csServRqstExec(self->control.csserv) != OK) { /* This is how the requests are being parsed... and pushed in te BIP event FIFO. */
-      genom_log_warn(1, "cannot read reception mailbox");
-      genom_log_warn(0, "aborting");
+      genom_<"$comp">_log_warn(1, "cannot read reception mailbox");
+      genom_<"$comp">_log_warn(0, "aborting");
       abort();
     }
     break;
 
     /* Not reachable in this function. */
   /* case ERROR: */
-  /*   genom_log_warn(1, "cannot check reception mailbox"); */
-  /*   genom_log_warn(0, "aborting"); */
+  /*   genom_<"$comp">_log_warn(1, "cannot check reception mailbox"); */
+  /*   genom_<"$comp">_log_warn(0, "aborting"); */
   /*   abort(); */
   }
  
@@ -306,7 +306,7 @@ static void
   struct genom_<"$comp">_<"[$s name]">_activity *a;
   STATUS s;
 
-  genom_log_debug("handling request for <"[$s name]">");
+  genom_<"$comp">_log_debug("handling request for <"[$s name]">");
 
   /* get an activity slot */
 <'  if {[catch {$s task} t]} {'>
@@ -338,7 +338,7 @@ static void
   s = csServRqstParamsGet(csserv, rid, (char *)&a->in, 0,
                           genom_<"$comp">_<"[$s name]">_decode);
   if (s == ERROR) {
-    genom_log_warn(0, "invalid input for service %s", "<"[$s name]">");
+    genom_<"$comp">_log_warn(0, "invalid input for service %s", "<"[$s name]">");
     a->h.state = genom_serialization_id;
     a->h.exdetail = NULL;
 
@@ -364,13 +364,13 @@ void BIP_<"$comp">_send_ir(struct genom_activity *a)
   STATUS s;
   SERV_ID csserv = self->control.csserv;
   
-  genom_log_info("Sending IR for rid: %d, aid: %d.", a->rid, a->aid);
+  genom_<"$comp">_log_info("Sending IR for rid: %d, aid: %d.", a->rid, a->aid);
 
   /* send intermediate reply */
   s = csServReplySend(csserv, a->rid, INTERMED_REPLY, OK,
                       (char *)&a->aid, sizeof(int), NULL);
   if (s == ERROR) {
-    genom_log_warn(1, "cannot acknowledge service");
+    genom_<"$comp">_log_warn(1, "cannot acknowledge service");
   }
   
 }
@@ -382,11 +382,11 @@ genom_event  BIP_<"$comp">_<"[$s name]">_validate(genom_<"$comp">_<"[$s name]">_
   struct genom_component_data *self = <"$comp">_genom_component;
   genom_event e;
 
-  genom_log_info("Calling <"$comp">_<"[$s name]"> validate codel.");
+  genom_<"$comp">_log_info("Calling <"$comp">_<"[$s name]"> validate codel.");
 
   a->h.state = e = genom_<"$comp">_<"[$s name]">_validatecb(self, a);
 
-  genom_log_info("Exiting <"$comp">_<"[$s name]"> validate codel with %s.", (!e?"genom_ok":e));
+  genom_<"$comp">_log_info("Exiting <"$comp">_<"[$s name]"> validate codel with %s.", (!e?"genom_ok":e));
 
   if (a->h.state) {		/* non nominal return, we fill the exception details, but we do not report the pb. BIP will... */
     a->h.exdetail = (void *)self->control.context.raised(
@@ -411,7 +411,7 @@ BIP_<"$comp">_<"[$s name]">_control(genom_<"$comp">_<"[$s name]">_activity_ptr a
   struct genom_component_data *self = <"$comp">_genom_component;
   genom_event e;
 
-  genom_log_info("Calling <"$comp">_<"[$s name]"> control codel.");
+  genom_<"$comp">_log_info("Calling <"$comp">_<"[$s name]"> control codel.");
 
   a->h.state = e = genom_<"$comp">_<"[$s name]">_controlcb(self, a);
 
@@ -427,7 +427,7 @@ BIP_<"$comp">_<"[$s name]">_control(genom_<"$comp">_<"[$s name]">_activity_ptr a
     a->h.state = <"$comp">_ether;
   }
 
-  genom_log_info("Exiting <"$comp">_<"[$s name]"> control codel with %s.", (!e?"genom_ok":e));
+  genom_<"$comp">_log_info("Exiting <"$comp">_<"[$s name]"> control codel with %s.", (!e?"genom_ok":e));
 
   return e;
 }
@@ -439,7 +439,7 @@ BIP_<"$comp">_<"[$s name]">_activity_report(genom_<"$comp">_<"[$s name]">_activi
   struct genom_component_data *self = <"$comp">_genom_component;
   STATUS s;
 
-  genom_log_info("Calling <"$comp">_<"[$s name]">_activity_report.");
+  genom_<"$comp">_log_info("Calling <"$comp">_<"[$s name]">_activity_report.");
 
 
   /* send final reply */
@@ -455,14 +455,14 @@ BIP_<"$comp">_<"[$s name]">_activity_report(genom_<"$comp">_<"[$s name]">_activi
       self->control.csserv, a->h.rid, FINAL_REPLY, ERROR, (char *)&a->h, 0,
       genom_<"$comp">_activity_encodex);
   if (s == ERROR) {
-    genom_log_warn(1, "could not send output for service %s", "<"[$s name]">");
+    genom_<"$comp">_log_warn(1, "could not send output for service %s", "<"[$s name]">");
     s = csServReplySend(
       self->control.csserv, a->h.rid, FINAL_REPLY, ERROR, NULL, 0,
       genom_<"$comp">_genom_serialization_encodex);
     if (s == ERROR) {
-      genom_log_warn(1, "discarding output for service %s", "<"[$s name]">");
+      genom_<"$comp">_log_warn(1, "discarding output for service %s", "<"[$s name]">");
     } else
-      genom_log_warn(0, "invalid output for service %s", "<"[$s name]">");
+      genom_<"$comp">_log_warn(0, "invalid output for service %s", "<"[$s name]">");
   }
 
   a->h.status = ACT_VOID; /* we need it to know that the slot is available for a new activity */
@@ -504,28 +504,6 @@ genom_activity_ptr BIP_cast_<"$comp">_<"[$s name]">_activity_inactivity(genom_<"
 
 <'}'>
 
-
-/* BIP bool functions to test if a particular genom_event is of a specific type. */
-int c_BIP_genom_ok_p(const genom_event e)
-{
-  return (e == genom_ok);
-}
-
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-int c_BIP_<"[$e cname]">_p(const genom_event e)
-{
-  return (e == <"[$e cname]">);
-}
-
-<'} elseif {([$e kind] == "exception")} {'>
-int c_BIP_<"[$e cname]">_p(const genom_event e)
-{
-  return (e == <"[$e cname]">_id);
-}
-
-<'}'>
-<'}'>
 
 
 /* eof */

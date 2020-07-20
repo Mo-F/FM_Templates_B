@@ -30,10 +30,10 @@ lang c
 
 #include "<"$comp">_internals.h"
 
-/* --- genom_activities::alloc --------------------------------------------- */
+/* --- genom_<"$comp">_activities::alloc --------------------------------------------- */
 
 genom_event
-genom_activities::alloc(genom_activity *i)
+genom_<"$comp">_activities::alloc(genom_<"$comp">_activity *i)
 {
   static int aid = 0;
 
@@ -55,10 +55,10 @@ genom_activities::alloc(genom_activity *i)
 }
 
 
-/* --- genom_activities::bygid --------------------------------------------- */
+/* --- genom_<"$comp">_activities::bygid --------------------------------------------- */
 
-genom_activity *
-genom_activities::bygid(const actionlib_msgs::GoalID &gid)
+genom_<"$comp">_activity *
+genom_<"$comp">_activities::bygid(const actionlib_msgs::GoalID &gid)
 {
   size_t id;
 
@@ -72,12 +72,12 @@ genom_activities::bygid(const actionlib_msgs::GoalID &gid)
 }
 
 
-/* --- genom_activities::call ---------------------------------------------- */
+/* --- genom_<"$comp">_activities::call ---------------------------------------------- */
 
 /** activity report callback
  */
-genom_activity::CallResult
-genom_activity::call(void) {
+genom_<"$comp">_activity::CallResult
+genom_<"$comp">_activity::call(void) {
   self->activity_report(this);
   return Success;
 }
@@ -88,14 +88,14 @@ genom_activity::call(void) {
 <'foreach s [$component services] {'>
 <'  if {[$s kind] == "activity"} {'>
 template<> int
-genom_activity_service_<"[$s name]">::interrupt_other(
-  genom_component_data *self) {
+genom_<"$comp">_activity_service_<"[$s name]">::interrupt_other(
+  genom_<"$comp">_component_data *self) {
   return self-><"[$s name]">_interrupt_other(aid);
 }
 
 <'  }'>
 int
-genom_component_data::<"[$s name]">_interrupt_other(int aid)
+genom_<"$comp">_component_data::<"[$s name]">_interrupt_other(int aid)
 {
   int delay = 0;
 
@@ -108,10 +108,10 @@ genom_component_data::<"[$s name]">_interrupt_other(int aid)
 <'    if {[llength $clist] == 0} continue'>
 
   /* task <"[$task name]"> */
-  pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
+    //  pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
   {
-    for(size_t id = 0; id < genom_activities::MAX_ACTIVITIES; id++) {
-      genom_activity *c = tasks.<"[$task name]">_.activities.a[id];
+    for(size_t id = 0; id < genom_<"$comp">_activities::MAX_ACTIVITIES; id++) {
+      genom_<"$comp">_activity *c = tasks.<"[$task name]">_.activities.a[id];
       if (!c) continue;
       if (c->status == ACT_VOID || c->status == ACT_ETHER) continue;
       if (c->aid == aid) continue;
@@ -124,7 +124,7 @@ genom_component_data::<"[$s name]">_interrupt_other(int aid)
               delay = 1;
               if (!tasks.<"[$task name]">_.runnable) {
                 tasks.<"[$task name]">_.runnable = 1;
-                pthread_cond_broadcast(&tasks.<"[$task name]">_.sync);
+		//                pthread_cond_broadcast(&tasks.<"[$task name]">_.sync);
               }
               /*FALLTHROUGH*/
             case ACT_INIT:
@@ -139,7 +139,7 @@ genom_component_data::<"[$s name]">_interrupt_other(int aid)
       }
     }
   }
-  pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
+  //  pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
 <'  }'>
 
   return delay;

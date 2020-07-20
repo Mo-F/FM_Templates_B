@@ -31,7 +31,7 @@ lang c
 #include "<"$comp">_control_task.h"
 
 genom_event
-genom_pocolibs_raise(genom_event ex, void *detail, size_t size,
+genom_<"$comp">_pocolibs_raise(genom_event ex, void *detail, size_t size,
                      genom_context self)
 {
   struct genom_context_data *data = self->data;
@@ -49,7 +49,7 @@ genom_pocolibs_raise(genom_event ex, void *detail, size_t size,
 }
 
 const void *
-genom_pocolibs_raised(genom_event *ex, genom_context self)
+genom_<"$comp">_pocolibs_raised(genom_event *ex, genom_context self)
 {
   struct genom_context_data *data = self->data;
 

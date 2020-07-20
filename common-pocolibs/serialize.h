@@ -1,6 +1,6 @@
 <'
 #
-# Copyright (c) 2012-2014 LAAS/CNRS
+# Copyright (c) 2012-2014,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Redistribution  and  use  in  source  and binary  forms,  with  or  without
@@ -66,8 +66,14 @@ genom_maxserialen_<"[$t mangle]">(void)
   return 0;
 <'    } else {'>
   /* maximum request size for variable types */
+
+<'foreach c [dotgen components] {
+set comp [$c name]'>
+
   extern size_t <"$comp">_varmsg_maxsize;
   return <"$comp">_varmsg_maxsize;
+<'}'>
+
 <'    }'>
 <'  } else {'>
 <'
@@ -113,6 +119,7 @@ genom_serialen_<"[$t mangle]">(<"[$t argument value data]">)
   set fixed [expr {[$t fixed]?"fixed":"variable"}]
   switch -glob -- $fixed+[$t kind] {'>
 <'    *+native {'>
+  (void)data; /* fix -Wunused-parameter */
   return 0;
 <'    }'>
 <'    *+typedef - {*+* member} {'>
@@ -129,6 +136,7 @@ genom_serialen_<"[$t mangle]">(<"[$t argument value data]">)
 <'
     }
     fixed+string {'>
+  (void)data; /* fix -Wunused-parameter */
   return <"[$t length]">;
 <'
     }
@@ -136,19 +144,35 @@ genom_serialen_<"[$t mangle]">(<"[$t argument value data]">)
 <'      if {[llength [$t members]]} {'>
   return sizeof(*data);
 <'        } else {'>
+  (void)data; /* fix -Wunused-parameter */
   return 0;
 <'        }'>
-<'
-      }
-    fixed+* {'>
+<'    }'>
+<'    fixed+* {'>
   return sizeof(<"[$t dereference value data]">);
 <'    }'>
-<'    variable+struct - variable+union - variable+exception {'>
+<'    variable+struct - variable+exception {'>
+<'      if {[llength [$t members]]} {'>
   size_t s = 0;
-<'      foreach e [$t members] {'>
+<'        foreach e [$t members] {'>
   s += genom_serialen_<"[$e mangle]">(
     <"[$e pass value data->[$e name]]">);
+<'        }'>
+  return s;
+<'      } else {'>
+  (void)data; /* fix -Wunused-parameter */
+  return 0;
 <'      }'>
+<'    }'>
+<'    variable+union {'>
+  size_t s = 0, e;
+<'        foreach e [$t members] {'>
+  e = genom_serialen_<"[$e mangle]">(
+    <"[$e pass value data->_u.[$e name]]">);
+  if (s < e) s = e;
+<'        }'>
+  s += genom_serialen_<"[[$t discr] mangle]">(
+    <"[[$t discr] pass value data->_d]">);
   return s;
 <'    }'>
 <'    variable+array {'>
@@ -195,6 +219,7 @@ genom_serialize_<"[$t mangle]">(char **buffer, <"[$t argument value data]">)
   set fixed [expr {[$t fixed]?"fixed":"variable"}]
   switch -glob -- $fixed+[$t kind] {'>
 <'    *+native {'>
+  (void)buffer; (void)data; /* fix -Wunused-parameter */
   return;
 <'    }'>
 <'    *+typedef - {*+* member} {'>
@@ -228,22 +253,43 @@ genom_serialize_<"[$t mangle]">(char **buffer, <"[$t argument value data]">)
 <'      if {[llength [$t members]]} {'>
   memcpy(*buffer, data, sizeof(*data));
   *buffer += sizeof(*data);
+<'      } else {'>
+  (void)buffer; (void)data; /* fix -Wunused-parameter */
 <'      }'>
 <'    }'>
 <'    fixed+* {'>
   memcpy(*buffer, <"[$t address [$t dereference value data]]">,
          sizeof(<"[$t dereference value data]">));
   *buffer += sizeof(<"[$t dereference value data]">);
-<'
-    }
-    variable+struct - variable+union - variable+exception {
-      foreach e [$t members] {'>
+<'    }'>
+<'    variable+struct - variable+exception {'>
+<'      if {![llength [$t members]]} {'>
+  (void)buffer; (void)data; /* fix -Wunused-parameter */
+<'      }'>
+<'      foreach e [$t members] {'>
   genom_serialize_<"[$e mangle]">(
     buffer, <"[$e pass value data->[$e name]]">);
-<'
-      }
-    }
-    variable+array {'>
+<'      }'>
+<'    }'>
+<'    variable+union {'>
+  genom_serialize_<"[[$t discr] mangle]">(
+    buffer, <"[[$t discr] pass value data->_d]">);
+  switch(data->_d) {
+<'      foreach e [$t members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+    case <"[language::cname $v]">:
+<'          } else {'>
+    default:
+<'          }'>
+<'        }'>
+      genom_serialize_<"[$e mangle]">(
+        buffer, <"[$e pass value data->_u.[$e name]]">);
+      break;
+<'      }'>
+  }
+<'    }'>
+<'    variable+array {'>
   uint32_t i;
   for (i=0; i<<"[$t length]">; i++)
     genom_serialize_<"[[$t type] mangle]">(
@@ -281,6 +327,7 @@ genom_deserialize_<"[$t mangle]">(char **buffer, ssize_t *size,
   set fixed [expr {[$t fixed]?"fixed":"variable"}]
   switch -glob -- $fixed+[$t kind] {'>
 <'    *+native {'>
+  (void)buffer; (void)size; (void)data; /* fix -Wunused-parameter */
 <'    }'>
 <'    *+typedef - {*+* member} {'>
   return genom_deserialize_<"[[$t type] mangle]">(buffer, size, data);
@@ -339,6 +386,8 @@ genom_deserialize_<"[$t mangle]">(char **buffer, ssize_t *size,
   }
   memcpy(data, *buffer, sizeof(*data));
   *buffer += sizeof(*data);
+<'      } else {'>
+  (void)buffer; (void)size; (void)data; /* fix -Wunused-parameter */
 <'      }'>
 <'    }'>
 <'    fixed+* {'>
@@ -349,19 +398,41 @@ genom_deserialize_<"[$t mangle]">(char **buffer, ssize_t *size,
   memcpy(<"[$t address [$t dereference reference data]]">, *buffer,
          sizeof(<"[$t dereference reference data]">));
   *buffer += sizeof(<"[$t dereference reference data]">);
-<'
-    }
-    variable+struct - variable+union - variable+exception {'>
+<'    }'>
+<'    variable+struct - variable+exception {'>
+<'      if {[llength [$t members]]} {'>
   int s;
-<'
-      foreach e [$t members] {'>
+<'        foreach e [$t members] {'>
   s = genom_deserialize_<"[$e mangle]">(
     buffer, size, <"[$e pass reference data->[$e name]]">);
   if (s) return s;
-<'
-      }
-    }
-    variable+array {'>
+<'        }'>
+<'      } else {'>
+  (void)buffer; (void)size; (void)data; /* fix -Wunused-parameter */
+<'      }'>
+<'    }'>
+<'    variable+union {'>
+  int s;
+  s = genom_deserialize_<"[[$t discr] mangle]">(
+    buffer, size, <"[[$t discr] pass reference data->_d]">);
+  if (s) return s;
+  switch(data->_d) {
+<'      foreach e [$t members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+    case <"[language::cname $v]">:
+<'          } else {'>
+    default:
+<'          }'>
+<'        }'>
+      s = genom_deserialize_<"[$e mangle]">(
+        buffer, size, <"[$e pass reference data->[$e name]]">);
+      if (s) return s;
+      break;
+<'      }'>
+  }
+<'    }'>
+<'    variable+array {'>
   uint32_t i;
   int s;
   for (i=0; i<<"[$t length]">; i++) {

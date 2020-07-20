@@ -37,6 +37,7 @@ lang c
 
 #include "<"$comp">_genom3_external_for_bip.h"
 
+
 #define BUFFER_SIZE 64		// If we really get more than 64 request... we are in deep s...
 
 
@@ -75,13 +76,6 @@ class <"$comp">BIPExternalPort : public AtomExternalPort {
 bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const genom_activity_ptr);
 <'}'>
 
-
-bool BIP_genom_ok_p(const genom_event);
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-bool BIP_<"[$e cname]">_p(const genom_event);
-<'}'>
-<'}'>
 
 
 #endif

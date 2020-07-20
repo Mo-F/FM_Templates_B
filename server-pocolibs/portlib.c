@@ -1,5 +1,5 @@
 <'
-# Copyright (c) 2011-2016 LAAS/CNRS
+# Copyright (c) 2011-2017 LAAS/CNRS
 # All rights reserved.
 #
 # Redistribution and use  in source  and binary  forms,  with or without
@@ -82,7 +82,7 @@ set digest [$component digest {{v} {
   strncpy(data->date, "<"[clock format [clock sec]]">", sizeof(data->date));
   strncpy(data->version, "<"[$component version]">", sizeof(data->version));
 
-  genom_log_debug("initialized genom_state port");
+  genom_<"$comp">_log_debug("initialized genom_state port");
   return 0;
 }
 
@@ -129,10 +129,11 @@ genom_state_<"$comp">_refresh(struct genom_component_data *self)
 
 <'if {[llength [$component tasks]]} {'>
   s = self->ports.genom_state.handle.write(&self->control.context);
-  if (s) genom_log_warn(0, "cannot update state port: %s", s);
-  genom_log_debug("refreshed genom_state port");
+  if (s) genom_<"$comp">_log_warn(0, "cannot update state port: %s", s);
+  genom_<"$comp">_log_debug("refreshed genom_state port");
   return s;
 <'} else {'>
+  (void)self;
   return genom_ok;
 <'}'>
 }
@@ -158,7 +159,7 @@ genom_metadata_<"$comp">_init(struct genom_component_data *self)
 <'  incr i }'>
   meta->services._length = <"[llength [$component services]]">;
 
-  genom_log_debug("initialized metadata port");
+  genom_<"$comp">_log_debug("initialized metadata port");
   return 0;
 }
 
@@ -175,21 +176,21 @@ genom_metadata_<"$comp">_fetch(struct genom_component_data *self,
 
   n = snprintf(name, sizeof(name), "%s/genom_metadata", comp);
   if (n <= 0 || n >= sizeof(name)) {
-    genom_log_warn(0, "port %s name too long", name);
-    genom_log_warn(0, "port name length limited to %d characters",
+    genom_<"$comp">_log_warn(0, "port %s name too long", name);
+    genom_<"$comp">_log_warn(0, "port name length limited to %d characters",
                    H2_DEV_MAX_NAME);
     return genom_syserr(&(genom_syserr_detail){ .code = ENAMETOOLONG },
                         &self->control.context);
   }
 
   if (posterFind(name, &id) != OK) {
-    genom_log_warn(1, "no such port %s", name);
+    genom_<"$comp">_log_warn(1, "no such port %s", name);
     return genom_no_such_service(&self->control.context);
   }
 
   s = posterTake(id, POSTER_READ);
   if (s != OK) {
-    genom_log_warn(1, "cannot access metadata port %s", name);
+    genom_<"$comp">_log_warn(1, "cannot access metadata port %s", name);
     return genom_no_such_service(&self->control.context);
   }
 
@@ -199,7 +200,7 @@ genom_metadata_<"$comp">_fetch(struct genom_component_data *self,
     genom_deserialize_<"[[dotgen types ::pocolibs::metadata::component] mangle]">
     (&data, &m, meta);
   if (s) {
-    genom_log_warn(1, "cannot read metadata port %s contents", name);
+    genom_<"$comp">_log_warn(1, "cannot read metadata port %s contents", name);
     return genom_no_such_service(&self->control.context);
   }
   posterGive(id);
@@ -276,14 +277,14 @@ genom_<"$comp">_<"[$p name]">_open(
   p = &self->data->self->ports.<"[$p name]">;
 
 <'  if {"multiple" in [$p kind]} {'>
-  n = snprintf(name, sizeof(name), "%s/<"[$p name]">/%s", genom_instance, id);
+  n = snprintf(name, sizeof(name), "%s/<"[$p name]">/%s", <"$comp">_genom_instance, id);
 <'  } else {'>
-  n = snprintf(name, sizeof(name), "%s/<"[$p name]">", genom_instance);
+  n = snprintf(name, sizeof(name), "%s/<"[$p name]">", <"$comp">_genom_instance);
 <'  }'>
   if (n <= 0 || n >= sizeof(name)) {
-    genom_log_warn(0, "port <"[$p name]"> name too long");
-    genom_log_warn(0, "port name length limited to %zu characters",
-                   H2_DEV_MAX_NAME - strlen(genom_instance) - 2);
+    genom_<"$comp">_log_warn(0, "port <"[$p name]"> name too long");
+    genom_<"$comp">_log_warn(0, "port name length limited to %zu characters",
+                   H2_DEV_MAX_NAME - strlen(<"$comp">_genom_instance) - 2);
     return genom_syserr(&(genom_syserr_detail){ .code = ENAMETOOLONG }, self);
   }
 
@@ -320,7 +321,7 @@ genom_<"$comp">_<"[$p name]">_open(
 
   s = posterCreate(name, (int)l, &ph->id);
   if (s == ERROR) {
-    genom_log_warn(1, "cannot create outport %s", name);
+    genom_<"$comp">_log_warn(1, "cannot create outport %s", name);
 <'    if {"multiple" in [$p kind]} {'>
     free(ph);
     p->h[n] = NULL;
@@ -328,9 +329,9 @@ genom_<"$comp">_<"[$p name]">_open(
     return genom_syserr(&(genom_syserr_detail){ .code = ENOENT }, self);
   }
   ph->size = l;
-  genom_log_info("created outport %s", name);
+  genom_<"$comp">_log_info("created outport %s", name);
 <'  } else {'>
-  genom_log_info("created inport %s", name);
+  genom_<"$comp">_log_info("created inport %s", name);
 <'  }'>
   return genom_ok;
 }
@@ -361,15 +362,15 @@ genom_<"$comp">_<"[$p name]">_close(
 <'  if {"out" in [$p dir]} {'>
   posterDelete(ph->id);
 <'    if {"multiple" in [$p kind]} {'>
-  genom_log_info("destroyed outport <"[$p name]">/%s", ph->name);
+  genom_<"$comp">_log_info("destroyed outport <"[$p name]">/%s", ph->name);
 <'    } else {'>
-  genom_log_info("destroyed outport <"[$p name]">");
+  genom_<"$comp">_log_info("destroyed outport <"[$p name]">");
 <'    }'>
 <'  } else {'>
 <'    if {"multiple" in [$p kind]} {'>
-  genom_log_info("destroyed inport <"[$p name]">/%s", ph->name);
+  genom_<"$comp">_log_info("destroyed inport <"[$p name]">/%s", ph->name);
 <'    } else {'>
-  genom_log_info("destroyed inport <"[$p name]">");
+  genom_<"$comp">_log_info("destroyed inport <"[$p name]">");
 <'    }'>
 <'  }'>
   ph->id = NULL;
@@ -427,11 +428,11 @@ genom_<"$comp">_<"[$p name]">_connect(
   if (!ph) return genom_no_such_inport(self);
 
   if (posterFind(name, &pid) != OK) {
-    genom_log_warn(1, "no such port %s", name);
+    genom_<"$comp">_log_warn(1, "no such port %s", name);
     return genom_no_such_outport(self);
   }
   if (posterTake(pid, POSTER_READ) != OK) {
-    genom_log_warn(1, "cannot connect port %s", name);
+    genom_<"$comp">_log_warn(1, "cannot connect port %s", name);
     return genom_port_io(self);
   }
   posterGive(pid);
@@ -468,23 +469,25 @@ genom_<"$comp">_<"[$p name]">_read(
   s = posterTake(ph->id, POSTER_READ);
   if (s != OK) {
 <'  if {"multiple" in [$p kind]} {'>
-    genom_log_warn(1, "cannot access inport <"[$p name]">/%s", ph->name);
+    genom_<"$comp">_log_warn(1, "cannot access inport <"[$p name]">/%s", ph->name);
 <'  } else {'>
-    genom_log_warn(1, "cannot access inport <"[$p name]">");
+    genom_<"$comp">_log_warn(1, "cannot access inport <"[$p name]">");
 <'  }'>
     return genom_port_io(self);
   }
 
   b = posterAddr(ph->id);
-  max = -1;
-  s = genom_deserialize_<"[[$p datatype] mangle]">(
-    &b, &max, <"[[$p datatype] pass value ph->buffer]">);
+  if (b) {
+    max = -1;
+    s = genom_deserialize_<"[[$p datatype] mangle]">(
+      &b, &max, <"[[$p datatype] pass value ph->buffer]">);
+  } else s = ERROR;
   posterGive(ph->id);
   if (s) {
 <'  if {"multiple" in [$p kind]} {'>
-    genom_log_warn(0, "cannot read inport <"[$p name]">/%s contents", ph->name);
+    genom_<"$comp">_log_warn(0, "cannot read inport <"[$p name]">/%s contents", ph->name);
 <'  } else {'>
-    genom_log_warn(0, "cannot read inport <"[$p name]"> contents");
+    genom_<"$comp">_log_warn(0, "cannot read inport <"[$p name]"> contents");
 <'  }'>
     return genom_serialization(self);
   }
@@ -526,10 +529,10 @@ genom_<"$comp">_<"[$p name]">_write(
     s = posterIoctl(ph->id, FIO_RESIZE, &l);
     if (s != OK) {
 <'  if {"multiple" in [$p kind]} {'>
-      genom_log_warn(1, "cannot resize outport <"[$p name]">/%s to %zu bytes",
+      genom_<"$comp">_log_warn(1, "cannot resize outport <"[$p name]">/%s to %zu bytes",
                      ph->name, l);
 <'  } else {'>
-      genom_log_warn(1, "cannot resize outport <"[$p name]"> to %zu bytes", l);
+      genom_<"$comp">_log_warn(1, "cannot resize outport <"[$p name]"> to %zu bytes", l);
 <'  }'>
       return genom_serialization(self);
     }
@@ -539,9 +542,9 @@ genom_<"$comp">_<"[$p name]">_write(
   s = posterTake(ph->id, POSTER_WRITE);
   if (s != OK) {
 <'  if {"multiple" in [$p kind]} {'>
-    genom_log_warn(1, "cannot access outport <"[$p name]">/%s", ph->name);
+    genom_<"$comp">_log_warn(1, "cannot access outport <"[$p name]">/%s", ph->name);
 <'  } else {'>
-    genom_log_warn(1, "cannot access outport <"[$p name]">");
+    genom_<"$comp">_log_warn(1, "cannot access outport <"[$p name]">");
 <'  }'>
     return genom_port_io(self);
   }
@@ -552,9 +555,9 @@ genom_<"$comp">_<"[$p name]">_write(
   s = posterGive(ph->id);
   if (s != OK) {
 <'  if {"multiple" in [$p kind]} {'>
-    genom_log_warn(1, "cannot flush outport <"[$p name]">/%s", ph->name);
+    genom_<"$comp">_log_warn(1, "cannot flush outport <"[$p name]">/%s", ph->name);
 <'  } else {'>
-    genom_log_warn(1, "cannot flush outport <"[$p name]">");
+    genom_<"$comp">_log_warn(1, "cannot flush outport <"[$p name]">");
 <'  }'>
     return genom_port_io(self);
   }

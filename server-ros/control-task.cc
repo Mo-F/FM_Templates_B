@@ -36,6 +36,10 @@ lang c
 #include "<"$comp">_internals.h"
 #include "<"$comp">_typecopy.h"
 
+#include "<"$comp">_genom3_external_for_bip.h"
+
+
+void genom_<"$comp">_fini(void);
 
 /* <"[--- ${comp}_cntrl_task --------------------------------------------]"> */
 
@@ -45,13 +49,22 @@ lang c
  * of a request, the corresponding callback function is invoked. Internal
  * events are handled and final replies are sent to the client.
  */
+ //int
+ //<"$comp">_cntrl_task(const char *instance)
 
-int
-<"$comp">_cntrl_task(const char *instance)
+
+static genom_<"$comp">_component_data cids;
+struct genom_<"$comp">_component_data *<"$comp">_genom_component;
+
+struct genom_<"$comp">_component_data *
+genom_<"$comp">_init(const char *instance)
 {
-  genom_component_data cids;
   int s;
+  
+  <"$comp">_genom_component= &cids;
 
+  cids.bipe_comp = BIPE_genom_component;
+  cids.bipe_comp->control.nthread++;
   cids.control.context.raise = ros_server_raise;
   cids.control.context.raised = ros_server_raised;
   cids.control.context.data = &cids.control.context_data;
@@ -61,37 +74,32 @@ int
   cids.control.context_data.exdetail = NULL;
   cids.control.context_data.exsize = 0;
 
-  cids.control.node = new ros::NodeHandle(instance);
-  cids.control.queue = ros::getGlobalCallbackQueue();
+  cids.control.node = new ros::NodeHandle("<"$comp">");
+  //  cids.control.queue = &(cids.control.queueStr);
+  cids.control.queue =  new ros::CallbackQueue();
+  cids.control.node->setCallbackQueue(cids.control.queue);
+
+  pthread_mutex_init(&cids.control.lock, NULL);
+  pthread_mutex_init(&cids.control.bip_proxi, NULL);
+  pthread_cond_init(&cids.control.serv_bip_proxi, NULL);
+  pthread_cond_init(&cids.control.sync, NULL);
+  cids.control.bip_proxi_idle = false;
+  cids.control.rqst_rcv = false;
 
   memset(cids.control.run_map, 0, sizeof(cids.control.run_map));
-  pthread_mutex_init(&cids.control.lock, NULL);
-  pthread_cond_init(&cids.control.sync, NULL);
 
 <'foreach s [$component services] {'>
 <'  if {[$s kind] ne "activity"} continue'>
   cids.services.<"[$s name]">_ = NULL;
 <'}'>
 
-  cids.resources.all = 0;
-  cids.resources.control = NULL;
-<'foreach t [$component tasks] { '>
-  cids.resources.task_<"[$t name]"> = NULL;
-<'}'>
-  cids.resources.q = 0;
-  cids.resources.qnext = 0;
-  pthread_mutex_init(&cids.resources.lock, NULL);
-  pthread_cond_init(&cids.resources.sync, NULL);
-
-  /* disable actionlib status updates when goal status does not change */
-  cids.control.node->setParam("actionlib_status_frequency", 0);
-
+   
 <'if {![catch {$component ids}]} {'>
   genom::ids::pinit(cids.ids);
 <'}'>
 
   /* advertise data outports */
-  genom_log_info("advertising ports");
+  genom_<"$comp">_log_info("advertising ports");
 <'foreach p [$component ports] {'>
   s = cids.ports.<"[$p name]">_.init(cids.control.node);
   if (s) errx(2, "error while initializing <"[$p name]"> port");
@@ -117,7 +125,7 @@ int
   cids.tasks.<"[$t name]">_.rusage.load.last = 0.;
   cids.tasks.<"[$t name]">_.rusage.load.max = 0.;
   cids.tasks.<"[$t name]">_.rusage.load.avg = 0.;
-  pthread_spin_init(&cids.tasks.<"[$t name]">_.rlock, 0);
+  //  pthread_spin_init(&cids.tasks.<"[$t name]">_.rlock, 0);
 
   cids.tasks.<"[$t name]">_.num = <"${comp}_[$t name]_TASKID">;
   cids.tasks.<"[$t name]">_.spawned = false;
@@ -125,9 +133,9 @@ int
   cids.tasks.<"[$t name]">_.runnable = true;
   cids.tasks.<"[$t name]">_.shutdown = false;
 
-  for(size_t i = 0; i < genom_activities::MAX_ACTIVITIES; i++)
+  for(size_t i = 0; i < genom_<"$comp">_activities::MAX_ACTIVITIES; i++)
     cids.tasks.<"[$t name]">_.activities.a[i] = NULL;
-  cids.tasks.<"[$t name]">_.permanent = new genom_activity_task_<"[$t name]">;
+  cids.tasks.<"[$t name]">_.permanent = new genom_<"$comp">_activity_task_<"[$t name]">;
   if (!cids.tasks.<"[$t name]">_.permanent) err(2, "<"[$t name]">");
   cids.tasks.<"[$t name]">_.permanent->self = &cids;
   cids.tasks.<"[$t name]">_.permanent->task = &cids.tasks.<"[$t name]">_;
@@ -136,58 +144,31 @@ int
         cids.tasks.<"[$t name]">_.permanent) != genom_ok)
     errx(2, "<"[$t name]">: permanent activity");
 
-  pthread_mutex_init(&cids.tasks.<"[$t name]">_.lock, NULL);
-  pthread_cond_init(&cids.tasks.<"[$t name]">_.sync, NULL);
+  //  pthread_mutex_init(&cids.tasks.<"[$t name]">_.lock, NULL);
+  // pthread_cond_init(&cids.tasks.<"[$t name]">_.sync, NULL);
 
-<'}'>
-
-<'if {![catch {$component clock-rate} rate]} {'>
-  /* create timer */
-  {
-    struct itimerspec ts;
-    if (timer_create(CLOCK_REALTIME, NULL, &cids.clock))
-      err(2, "timer_create");
-
-    if (pthread_create(&cids.clockthread, NULL,
-                       genom_component_data::timercb, &cids))
-      err(2, "timer thread create");
-    pthread_detach(cids.clockthread);
-
-<'  set rate [$rate value]'>
-    ts.it_interval.tv_sec =
-      <"[expr {int($rate)}]">;
-    ts.it_interval.tv_nsec =
-      <"[expr {int($rate*1000000000) % 1000000000}]">;
-    ts.it_value = ts.it_interval;
-    if (timer_settime(cids.clock, 0, &ts, NULL))
-      err(2, "timer thread create");
-  }
-<'}'>
-
-  /* spawn tasks */
-<'foreach t [$component tasks] {'>
-  cids.tasks.<"[$t name]">_.spawn(&cids,
-                    "<"[$t name]">", <"$comp">_<"[$t name]">_task);
-  if (!cids.tasks.<"[$t name]">_.spawned) goto shutdown;
 <'}'>
 
   /* advertise services */
-  genom_log_info("advertising services");
+  genom_<"$comp">_log_info("advertising services");
 <'foreach s [$component services] {'>
 <'  if {[catch {$s task} t]} {'>
   cids.services.<"[$s name]">_ =
     cids.control.node->advertiseService(
-      "<"[$s name]">", &genom_component_data::<"[$s name]">_rqstcb, &cids);
+      "<"[$s name]">", &genom_<"$comp">_component_data::<"[$s name]">_rqstcb, &cids);
 <'  } else {'>
   cids.services.<"[$s name]">_ =
     new actionlib::ActionServer< genom::action_<"[$s name]"> >(
       *cids.control.node, "<"[$s name]">",
-      boost::bind(&genom_component_data::<"[$s name]">_rqstcb, &cids, _1),
-      boost::bind(&genom_component_data::<"[$s name]">_intercb, &cids, _1),
+      boost::bind(&genom_<"$comp">_component_data::<"[$s name]">_rqstcb, &cids, _1),
+      boost::bind(&genom_<"$comp">_component_data::<"[$s name]">_intercb, &cids, _1),
       false);
   cids.services.<"[$s name]">_->start();
 <'  }'>
 <'}'>
+
+  /* disable actionlib status updates when goal status does not change */
+    //  cids.control.node->setParam("actionlib_status_frequency", 0); done by the BIPE comp.
 
   {
     /*
@@ -202,117 +183,49 @@ int
     signal(SIGUSR1, handler);
   }
 
-  /* go */
-  genom_log_info("control task initialized and running");
-  while(ros::ok() && !genom_shutdown) {
-    cids.control.queue->callAvailable(ros::WallDuration(1.));
-    cids.genom_state_refresh();
-  }
-  goto shutdown;
+  cids.spawn_control_task();	// This will start the ROS thread handling the queue.
 
-shutdown:
-  /* interrupt & wait for all regular activities */
-<'foreach t [$component tasks] {'>
-  if (cids.tasks.<"[$t name]">_.spawned) {
-    int delay;
+  return &cids;
+}
 
-    genom_log_debug("interrupting task <"[$t name]"> activities");
-    pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
-    do {
-      delay = 0;
-      for(size_t id = 0; id < genom_activities::MAX_ACTIVITIES; id++) {
-        genom_activity *a = cids.tasks.<"[$t name]">_.activities.a[id];
-        if (!a) continue;
-        if (a == cids.tasks.<"[$t name]">_.permanent) continue;
+int
+BIP_<"$comp">_init_mbox(void)
+{
+  return 1;			// This does not make sense in ROS, but we  define it to minimize the change in the BIP model.
+}
 
-        if (a->status == ACT_INIT || a->status == ACT_RUN) {
-          if (!a->stop) {
-            a->stop = 1;
-            a->interruptedby = "kill";
-            if (!cids.tasks.<"[$t name]">_.runnable) {
-              cids.tasks.<"[$t name]">_.runnable = 1;
-              pthread_cond_broadcast(&cids.tasks.<"[$t name]">_.sync);
-            }
-          }
-          delay = 1;
-        } else if (a->status == ACT_STOP)
-          delay = 1;
-      }
-      if (delay) {
-        pthread_cond_wait(&cids.tasks.<"[$t name]">_.sync,
-                          &cids.tasks.<"[$t name]">_.lock);
-        pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-        cids.control.queue->callAvailable();
-        cids.genom_state_refresh();
-        pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
-      }
-    } while(delay);
-    pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-  }
 
-<'}'>
-  /* interrupt permanent activities */
-<'foreach t [lreverse [$component tasks]] {'>
-  if (cids.tasks.<"[$t name]">_.spawned) {
-    genom_log_debug("interrupting task <"[$t name]">");
-    pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
+void
+BIP_<"$comp">_cntrl_task_check_event(void *data) /* This is the function which should be
+						called by the event port */
+{
+  genom_<"$comp">_component_data *self = <"$comp">_genom_component;
 
-    genom_activity *a = cids.tasks.<"[$t name]">_.permanent;
-    if (!a) {
-      /* activity was ether, realloc one */
-      a = new genom_activity_task_<"[$t name]">;
-      if (!a) err(2, "<"[$t name]">");
-      a->self = &cids;
-      a->task = &cids.tasks.<"[$t name]">_;
-      a->sid = -1;
-      if (cids.tasks.<"[$t name]">_.activities.alloc(a) != genom_ok)
-        errx(2, "<"[$t name]">: permanent activity");
-      cids.tasks.<"[$t name]">_.permanent = a;
-    }
-    if (a->status != ACT_STOP) {
-      if (a->status == ACT_ETHER) a->status = ACT_INIT;
-      a->stop = 1;
-      a->interruptedby = "kill";
-      cids.tasks.<"[$t name]">_.runnable = 1;
-      pthread_cond_broadcast(&cids.tasks.<"[$t name]">_.sync);
-    }
+  self->control.bip_event_port = data;	/* data is a pointer on the BIP port. No need to do it each time, but simpler to code... */
 
-    while (cids.tasks.<"[$t name]">_.permanent &&
-           cids.tasks.<"[$t name]">_.permanent->status != ACT_ETHER) {
-      pthread_cond_wait(&cids.tasks.<"[$t name]">_.sync,
-                        &cids.tasks.<"[$t name]">_.lock);
-      pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-      cids.control.queue->callAvailable();
-      cids.genom_state_refresh();
-      pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
-    }
-    pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-  }
+  genom_<"$comp">_log_info("BIP_<"$comp">_cntrl_task_check_event called and waiting for rqst");
 
-<'}'>
-  /* wait for exec tasks */
-<'foreach t [lreverse [$component tasks]] {'>
-  if (cids.tasks.<"[$t name]">_.spawned) {
-    genom_log_debug("waiting task <"[$t name]">");
-    pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
-    cids.tasks.<"[$t name]">_.shutdown = 1;
-    cids.tasks.<"[$t name]">_.runnable = 1;
-    pthread_cond_broadcast(&cids.tasks.<"[$t name]">_.sync);
-    while (cids.tasks.<"[$t name]">_.spawned) {
-      pthread_cond_wait(&cids.tasks.<"[$t name]">_.sync,
-                        &cids.tasks.<"[$t name]">_.lock);
-      pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-      cids.control.queue->callAvailable();
-      cids.genom_state_refresh();
-      pthread_mutex_lock(&cids.tasks.<"[$t name]">_.lock);
-    }
-    pthread_join(cids.tasks.<"[$t name]">_.id, NULL);
-    pthread_mutex_unlock(&cids.tasks.<"[$t name]">_.lock);
-  }
+  pthread_mutex_lock(&self->control.bip_proxi);
 
-<'}'>
+  while (!self->control.rqst_rcv)
+    pthread_cond_wait(&self->control.serv_bip_proxi, &self->control.bip_proxi);
 
-  genom_log_info("shutting down services");
+  self->control.rqst_rcv = false;
+
+  pthread_mutex_unlock(&self->control.bip_proxi);
+ 
+  genom_<"$comp">_log_info("BIP_<"$comp">_cntrl_task_check_event thread got control after request received...");
+
+  call_<"$comp">BIPExternalPort_push(self->control.bip_event_port, self->control.current_rqst_type);
+
+  return;
+}
+
+void
+genom_<"$comp">_fini(void)
+{
+
+  genom_<"$comp">_log_info("shutting down services");
 <'foreach s [$component services] {'>
 <'  if {[catch {$s task} t]} {'>
   cids.services.<"[$s name]">_.shutdown();
@@ -322,121 +235,63 @@ shutdown:
 <'  }'>
 <'}'>
 
-  genom_log_info("shutting down ports");
+  genom_<"$comp">_log_info("shutting down ports");
 <'foreach p [$component ports] {'>
   cids.ports.<"[$p name]">_.fini();
 <'}'>
 
-  genom_log_info("shutting down control task");
-<'if {![catch {$component clock-rate} rate]} {'>
-  pthread_cancel(cids.clockthread);
-<'}'>
+  genom_<"$comp">_log_info("shutting down control task");
 <'if {![catch {$component ids}]} {'>
   genom::ids::pfini(cids.ids);
 <'}'>
-  cids.control.node->shutdown();
-  delete cids.control.node;
 
-  genom_log_info("shutdown complete");
-  return 0;
+  genom_<"$comp">_log_info("shutdown complete");
+  return;
 }
 
 
-/* <"[--- genom_exec_task::spawn ----------------------------------------]"> */
+void *start_<"$comp">_control_task(void *v)
+{
+  genom_<"$comp">_component_data *cids= (genom_<"$comp">_component_data *)v;
+
+  genom_<"$comp">_log_info("control task (ROS spin) spwaned and running");
+  while(ros::ok() && !BIPE_genom_shutdown) {
+    cids->control.queue->callAvailable(ros::WallDuration(1.));
+    //    cids->genom_state_refresh();
+  }
+  genom_<"$comp">_log_info("control task (ROS spin) asked to shutdown... ");
+  genom_<"$comp">_fini();
+
+  if (!--(cids->bipe_comp->control.nthread))
+    genom_BIPE_fini();
+  else
+    pthread_exit(NULL);
+}
+
 
 void
-genom_exec_task::spawn(genom_component_data *self,
-                       const char *name, void *(*start)(void *))
+genom_<"$comp">_component_data::spawn_control_task(void)
 {
   int s;
-
-  pthread_mutex_lock(&lock);
-  spawned = true;
-  permanent->start = 1;
-
-  s = pthread_create(&id, NULL, start, self);
-  if (s) err(2, "spawning task %s", name);
-  while (permanent->start)
-    pthread_cond_wait(&sync, &lock);
-
-  if (!spawned) {
-    genom_log_warn("cannot spawn %s exec task", name);
-    pthread_mutex_unlock(&lock);
-    return;
-  }
-  if (permanent->status == ACT_ETHER && permanent->state != <"$comp">_ether) {
-    genom_log_warn("%s exec task failed", name);
-    pthread_mutex_unlock(&lock);
-    spawned = false;
-    return;
-  }
-  self->genom_state_update(this);
-  pthread_mutex_unlock(&lock);
-
-  self->genom_state_refresh();
+  s = pthread_create(&control.control_task_t, NULL, start_<"$comp">_control_task, this);
+  if (s) err(2, "spawning ROS/Control task");
 }
-
 
 /* <"[--- ${comp}_cntrl_task_signal -------------------------------------]"> */
 
 /** \brief Signal the control task that an activity is terminated
  */
 
-static const struct genom_activity_cbd_ {
-  void operator()(genom_activity *) {}
-} genom_activity_cbd = {};
+static const struct genom_<"$comp">_activity_cbd_ {
+  void operator()(genom_<"$comp">_activity *) {}
+} genom_<"$comp">_activity_cbd = {};
 
 void
-<"$comp">_cntrl_task_signal(genom_activity *a)
+BIPE_cntrl_task_signal(genom_<"$comp">_activity *a)
 {
-  ros::CallbackInterfacePtr cb(a, genom_activity_cbd);
+  ros::CallbackInterfacePtr cb(a, genom_<"$comp">_activity_cbd);
   a->self->control.queue->addCallback(cb);
 }
-
-
-<'if {![catch {$component clock-rate} rate]} {'>
-/* --- Timer callback ------------------------------------------------------ */
-
-void *
-genom_component_data::timercb(void *data)
-{
-  genom_component_data *self = (genom_component_data *)data;
-  uint64_t ticks;
-  sigset_t sset;
-  int sig;
-
-  sigemptyset(&sset);
-  sigaddset(&sset, SIGALRM);
-
-  while (1) {
-    do {
-      sig = 0;
-      sigwait(&sset, &sig);
-    } while (sig != SIGALRM);
-
-    ticks++;
-<'  foreach task [$component tasks] {'>
-<'    if {[catch {$task period} period]} continue'>
-<'
-    set ticks [tcl::mathfunc::int [expr {[$period value]/[$rate value]}]]
-    if {![catch {$task delay} delay]} {
-      set d [tcl::mathfunc::int [expr {[$delay value]/[$rate value]}]]
-    } else {
-      set d 0
-    }
-'>
-    if (ticks % <"$ticks"> == <"$d">) {
-      pthread_mutex_lock(&self->tasks.<"[$task name]">_.lock);
-      self->tasks.<"[$task name]">_.wakeup = true;
-      pthread_cond_broadcast(&self->tasks.<"[$task name]">_.sync);
-      pthread_mutex_unlock(&self->tasks.<"[$task name]">_.lock);
-    }
-<'  }'>
-  }
-  return NULL;
-}
-<'}'>
-
 
 <'foreach s [$component services] {'>
 
@@ -445,25 +300,40 @@ genom_component_data::timercb(void *data)
 /* <"[--- Control service [$s name] ----------------------------------------]"> */
 
 bool
-genom_component_data::<"[$s name]">_rqstcb(
+genom_<"$comp">_component_data::<"[$s name]">_rqstcb(
   genom::srv_<"[$s name]">::input &in, genom::srv_<"[$s name]">::output &out)
 {
   genom::srv_<"[$s name]">::locals locals;
   genom_event s;
+  genom_<"$comp">_component_data *self = this;
+   
+  genom_<"$comp">_log_info("CT request <"[$s name]"> arrived");
+  pthread_mutex_lock(&self->control.bip_proxi);
+  self->control.rqst_rcv = true;
+  self->control.current_rqst_type = <"$COMP">_<"[$s name]">_RQSTID; // this will tell which RQID we are currently handing (can only have one).
+  self->services.<"[$s name]">_locals = locals; // saving locals 
+  self->services.<"[$s name]">_in = in;		// saving in
 
-  genom_log_debug("handling request for <"[$s name]">");
+  genom_<"$comp">_log_info("CT broadcasting to wake up BIP_<"$comp">_cntrl_task_check_event");
+  pthread_cond_broadcast(&self->control.serv_bip_proxi);
+  pthread_mutex_unlock(&self->control.bip_proxi);
 
-  s = <"[$s name]">_controlcb(locals, in, out);
 
-  /* wake up sleeping activities */
-<'    foreach t [$component tasks] {'>
-  pthread_mutex_lock(&tasks.<"[$t name]">_.lock);
-  if (!tasks.<"[$t name]">_.runnable) {
-    tasks.<"[$t name]">_.runnable = 1;
-    pthread_cond_broadcast(&tasks.<"[$t name]">_.sync);
-  }
-  pthread_mutex_unlock(&tasks.<"[$t name]">_.lock);
-<'    }'>
+  genom_<"$comp">_log_info("CT waiting for BIP to finish");
+  pthread_mutex_lock(&self->control.bip_proxi);
+  while (!self->control.bip_proxi_idle) // wait BIP_PROXI is done...
+    pthread_cond_wait(&self->control.serv_bip_proxi, &self->control.bip_proxi);
+  
+  self->control.bip_proxi_idle = false;
+  pthread_mutex_unlock(&self->control.bip_proxi);
+  genom_<"$comp">_log_info("CT BIP has finished");
+ 
+  genom_<"$comp">_log_info("Handling request for <"[$s name]">");
+
+  s =  self->control.current_rqst_return;
+
+  out = self->services.<"[$s name]">_out; // get the out from the rqst
+  locals = self->services.<"[$s name]">_locals; // getting locals back, although I do not see the point for ctrl rqst
 
   out.genom_success = s == genom_ok;
   if (!out.genom_success)
@@ -475,22 +345,26 @@ genom_component_data::<"[$s name]">_rqstcb(
     <"[$s name]">_interrupt_other(-1);
   }
 
-  genom_log_debug("done service %s", "<"[$s name]">");
+  genom_<"$comp">_log_info("Done with service %s", "<"[$s name]">");
   return true;
 }
 <'  } else {'>
 /* <"[--- Execution service [$s name] --------------------------------------]"> */
 
 void
-genom_component_data::<"[$s name]">_rqstcb(
+genom_<"$comp">_component_data::<"[$s name]">_rqstcb(
   actionlib::ServerGoalHandle< genom::action_<"[$s name]"> > rqst)
 {
-  genom_activity_service_<"[$s name]"> *a;
+  genom_<"$comp">_activity_service_<"[$s name]"> *a;
   genom_event s;
+  genom_<"$comp">_component_data *self = this;
 
-  genom_log_debug("handling request for <"[$s name]">");
+  genom_<"$comp">_log_info("CT request <"[$s name]"> arrived");
+  pthread_mutex_lock(&self->control.bip_proxi);
+  self->control.rqst_rcv = true;
+  self->control.current_rqst_type = <"$COMP">_<"[$s name]">_RQSTID; // this will tell which RQID we are currently handing (can only have one).
 
-  a = new genom_activity_service_<"[$s name]">();
+  a = new genom_<"$comp">_activity_service_<"[$s name]">();
   if (!a) { rqst.setRejected(); return; }
 
   a->self = this;
@@ -499,14 +373,37 @@ genom_component_data::<"[$s name]">_rqstcb(
   a->rqst = rqst;
   genom::ids::pcopy(a->in, *rqst.getGoal());
 
-  pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
   s = tasks.<"[$task name]">_.activities.alloc(a);
-  pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
-  if (s) { rqst.setRejected(); delete a; return; }
+  if (s) {
+    rqst.setRejected();
+    delete a;
+    return;
+  }
 
   rqst.setAccepted();
 
-  s = <"[$s name]">_controlcb(a->locals, a->in, a->out);
+  self->control.current_activity = a;
+
+  genom_<"$comp">_log_info("CT broadcasting to wake up BIP_<"$comp">_cntrl_task_check_event");
+  pthread_cond_broadcast(&self->control.serv_bip_proxi);
+  pthread_mutex_unlock(&self->control.bip_proxi);
+
+
+  genom_<"$comp">_log_info("CT waiting for BIP to finish");
+  pthread_mutex_lock(&self->control.bip_proxi);
+  while (!self->control.bip_proxi_idle) // wait BIP_PROXI is done...
+    pthread_cond_wait(&self->control.serv_bip_proxi, &self->control.bip_proxi);
+
+  // If we get here, it means that a rqst report (a failure) or the IR woke us up...
+  self->control.bip_proxi_idle = false;
+  pthread_mutex_unlock(&self->control.bip_proxi);
+  genom_<"$comp">_log_info("CT BIP has finished");
+ 
+  genom_<"$comp">_log_info("Handling request for <"[$s name]">");
+  
+  //  s = <"[$s name]">_controlcb(a->locals, a->in, a->out);
+  s =  self->control.current_rqst_return;
+
   if (s) {
     /* failure in control codels */
     assert(a->status == ACT_INIT);
@@ -521,33 +418,24 @@ genom_component_data::<"[$s name]">_rqstcb(
     /* will be scheduled once conflicting activities have stopped */
   } else {
     /* start activity */
-    pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
+    //    pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
     a->start = 1;
     genom_state_update(&tasks.<"[$task name]">_);
-    pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
+    //    pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
   }
-
-  /* wake up sleeping activities */
-<'    foreach t [$component tasks] {'>
-  pthread_mutex_lock(&tasks.<"[$t name]">_.lock);
-  if (!tasks.<"[$t name]">_.runnable) {
-    tasks.<"[$t name]">_.runnable = 1;
-    pthread_cond_broadcast(&tasks.<"[$t name]">_.sync);
-  }
-  pthread_mutex_unlock(&tasks.<"[$t name]">_.lock);
-<'    }'>
 }
 
 void
-genom_component_data::<"[$s name]">_intercb(
+genom_<"$comp">_component_data::<"[$s name]">_intercb(
   actionlib::ServerGoalHandle< genom::action_<"[$s name]"> > rqst)
 {
-  genom_activity *a;
+  // I leave this code here, but I do not see it being used within the BIPE
+  genom_<"$comp">_activity *a;
 
-  pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
+  //  pthread_mutex_lock(&tasks.<"[$task name]">_.lock);
   a = tasks.<"[$task name]">_.activities.bygid(rqst.getGoalID());
   if (a == NULL) {
-    pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
+    //    pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
     genom_log_warn(
       "cancel request for non-existent activity %s",
       rqst.getGoalID().id.c_str());
@@ -562,11 +450,11 @@ genom_component_data::<"[$s name]">_intercb(
       a->interruptedby = "client";
       if (!tasks.<"[$task name]">_.runnable) {
         tasks.<"[$task name]">_.runnable = 1;
-        pthread_cond_broadcast(&tasks.<"[$task name]">_.sync);
+	//        pthread_cond_broadcast(&tasks.<"[$task name]">_.sync);
       }
       break;
   }
-  pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
+  //  pthread_mutex_unlock(&tasks.<"[$task name]">_.lock);
 }
 
 <'  }'>
@@ -576,50 +464,48 @@ genom_component_data::<"[$s name]">_intercb(
 /* --- Activity callback --------------------------------------------------- */
 
 void
-genom_component_data::activity_report(genom_activity *a)
+genom_<"$comp">_component_data::activity_report(genom_<"$comp">_activity *a)
 {
-  assert(a->status == ACT_ETHER);
+  // assert(a->status == ACT_ETHER);
 
-  /* success: update after/before array */
-  if (a->state == <"$comp">_ether && a != a->task->permanent)
-    control.run_map[a->sid] = true;
+  // /* success: update after/before array */
+  // if (a->state == <"$comp">_ether && a != a->task->permanent)
+  //   control.run_map[a->sid] = true;
 
   /* reply */
   a->report();
 
-  /* delete self */
-  pthread_mutex_lock(&a->task->lock);
   assert(a->task->activities.a[a->iid] == a);
   a->task->activities.a[a->iid] = NULL;
   if (a == a->task->permanent) a->task->permanent = NULL;
   genom_state_update(a->task);
-  pthread_mutex_unlock(&a->task->lock);
 
-<'    foreach t [$component tasks] {'>
-  /* check for pending activities */
-  {
-    genom_exec_task &task = a->self->tasks.<"[$t name]">_;
-
-    pthread_mutex_lock(&task.lock);
-    for(size_t i = 0; i < genom_activities::MAX_ACTIVITIES; i++) {
-      genom_activity *c = task.activities.a[i];
-      if (!c) continue;
-      if (c->status != ACT_INIT) continue;
-
-      pthread_mutex_unlock(&task.lock);
-      int delay = c->interrupt_other(a->self);
-      pthread_mutex_lock(&task.lock);
-
-      if (!delay) {
-        c->start = 1;
-        if (!task.runnable) {
-          task.runnable = 1;
-          pthread_cond_broadcast(&task.sync);
-        }
-      }
-    }
-    pthread_mutex_unlock(&task.lock);
-  }
-<'    }'>
   delete a;
 }
+
+/* BIP bool functions to test if an activity is of a specific RQSTID.  */
+<'foreach s [$component services] {'>
+bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const int a)
+{
+  return (a == <"$COMP">_<"[$s name]">_RQSTID);
+}
+
+<'}'>
+
+<'foreach e [dotgen types] {'>
+<'  if {([$e kind] == "exception")} {'>
+// bool BIP_<"[$e cname]">_p(const genom_event e)
+// {
+//   return (<"[$e cname]">_id == e);
+// }
+
+<'}'>
+<'  if {([$e kind] == "event") || ([$e kind] == "pause event")} {'>
+// bool BIP_<"[$e cname]">_p(const genom_event e)
+// {
+//   return (<"[$e cname]"> == e);
+// }
+
+<'}'>
+<'}'>
+

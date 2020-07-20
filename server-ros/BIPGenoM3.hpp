@@ -52,14 +52,14 @@ class <"$comp">BIPExternalPort : public AtomExternalPort {
   virtual void purgeEvents(); 
 
   virtual TimeValue eventTime() const;
-  virtual genom_activity_ptr event_get_activity();
+  virtual int event_get_activity();
 
-  void push(genom_activity_ptr a); // had to move it out of the protected to call it from my C function...
+  void push(int a); // had to move it out of the protected to call it from my C function...
 
  protected:
   static void *spinning(void *arg);
 
-  genom_activity_ptr rqst[BUFFER_SIZE];
+  int rqst[BUFFER_SIZE];
   TimeValue mTime[BUFFER_SIZE];
 
   int readIndex;
@@ -68,21 +68,6 @@ class <"$comp">BIPExternalPort : public AtomExternalPort {
   mutable pthread_mutex_t mutex;
   pthread_t pid;
 };
-
-
-/* BIP bool functions to test if an activity is of a specific RQSTID.  */
-<'foreach s [$component services] {'>
-bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const genom_activity_ptr);
-<'}'>
-
-
-bool BIP_genom_ok_p(const genom_event);
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-bool BIP_<"[$e cname]">_p(const genom_event);
-<'}'>
-<'}'>
-
 
 #endif
 

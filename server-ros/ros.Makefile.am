@@ -1,6 +1,6 @@
 <'
 #
-# Copyright (c) 2012-2015 LAAS/CNRS
+# Copyright (c) 2012-2015,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Permission to use, copy, modify, and distribute this software for any purpose
@@ -19,12 +19,12 @@
 #
 
 # check arguments
-if {[llength $argv] != 2} { error "expected arguments: types input" }
-lassign $argv types input
+if {[llength $argv] != 2} { error "expected arguments: input" }
+lassign $argv msg input
 
 # compute handy shortcuts
-set component [dotgen component]
-set comp [$component name]
+# set component [dotgen component]
+# set comp [$component name]
 '>
 
 ACLOCAL_AMFLAGS=	-I autoconf
@@ -41,14 +41,42 @@ override ROS_ROOT:=${std_msgs_prefix}/share/ros
 
 # ROS_PACKAGE_PATH points to the ros hierarchy inside generated sources
 export ROS_PACKAGE_PATH
-override ROS_PACKAGE_PATH:=${abs_top_srcdir}/<"$comp">:${ROS_PACKAGE_PATH}
-
+override ROS_PACKAGE_PATH:=<'foreach c [dotgen components] {set comp [$c name]'>${abs_top_srcdir}/<"$comp">:<'}'>${ROS_PACKAGE_PATH}
 
 # --- component ------------------------------------------------------------
 
-bin_PROGRAMS=	<"$comp">-ros
+lib_LTLIBRARIES=<'foreach c [dotgen components] {set comp [$c name]'> lib<"$comp">-bip-ros.la<'}'> libbip-main-ros.la
 
-<"$comp">_ros_SOURCES=\
+
+libbip_main_ros_la_SOURCES=\
+	src/BIPEmain.cc		\
+	src/BIPEcontrol-task.cc		\
+	src/BIPEinternals.h
+
+libbip_main_ros_la_CFLAGS=\
+	${PTHREAD_CFLAGS}
+libbip_main_ros_la_CXXFLAGS=\
+	${PTHREAD_CFLAGS}
+
+libbip_main_ros_la_CPPFLAGS=\
+	${<"$comp">_CFLAGS}			\
+	${genom3_CFLAGS}			\
+	${ROS_CFLAGS}				\
+	${BOOST_CPPFLAGS}
+
+libbip_main_ros_la_LDFLAGS=\
+	${BOOST_LDFLAGS} $(patsubst -L%,-R%,${BOOST_LDFLAGS})
+
+libbip_main_ros_la_LIBADD=\
+	${<"$comp">_LIBS}			\
+	${genom3_LIBS}				\
+	${ROS_LIBS}				\
+	${PTHREAD_LIBS}				\
+	${BOOST_THREAD_LIB}			\
+	$(codels_LIBS) 
+
+<'foreach component [dotgen components] {set comp [$component name]'> 
+lib<"$comp">_bip_ros_la_SOURCES=\
 	src/<"$comp">_c_types.h			\
 	src/<"$comp">_typecopy.h		\
 	src/<"$comp">_serialize.h		\
@@ -70,26 +98,52 @@ bin_PROGRAMS=	<"$comp">-ros
 	src/<"$comp">_json.cc			\
 	src/<"$comp">_exception.cc
 
-<"$comp">_ros_CFLAGS=\
+lib<"$comp">_bip_ros_la_CFLAGS=\
 	${PTHREAD_CFLAGS}
-<"$comp">_ros_CXXFLAGS=\
+lib<"$comp">_bip_ros_la_CXXFLAGS=\
 	${PTHREAD_CFLAGS}
 
-<"$comp">_ros_CPPFLAGS=\
+lib<"$comp">_bip_ros_la_CPPFLAGS=\
 	${<"$comp">_CFLAGS}			\
 	${genom3_CFLAGS}			\
 	${ROS_CFLAGS}				\
 	${BOOST_CPPFLAGS}
 
-<"$comp">_ros_LDFLAGS=\
+lib<"$comp">_bip_ros_la_LDFLAGS=\
+	${BOOST_LDFLAGS} $(patsubst -L%,-R%,${BOOST_LDFLAGS})
+
+lib<"$comp">_bip_ros_la_LIBADD=\
 	${<"$comp">_LIBS}			\
 	${genom3_LIBS}				\
 	${ROS_LIBS}				\
-	${BOOST_LDFLAGS} $(patsubst -L%,-R%,${BOOST_LDFLAGS})
-
-<"$comp">_ros_LDADD=\
 	${PTHREAD_LIBS}				\
-	${BOOST_THREAD_LIB}
+	${BOOST_THREAD_LIB}			\
+	$(codels_LIBS) 
+ <'}'>
+
+# This could be much smarter, but will do for now.
+all-local: src/bip/out/system
+
+src/bip/out/system: <'foreach c [dotgen components] {set comp [$c name]'> lib<"$comp">-bip-ros.la \
+			src/bip/external/<"$comp">_BIPGenoM3.cpp \
+			src/bip/external/<"$comp">_BIPGenoM3.hpp \
+ <'}'>
+			libbip-main-ros.la \
+			src/bip/out/CMakeLists.txt \
+			src/bip/external/BIPmain.cpp
+	make src/bip/out/Makefile
+	(cd src/bip/out ;\
+	make)
+
+src/bip/out/CMakeLists.txt: src/bip/BIPEBIPGenoM3.bip
+	(cd src/bip ; \
+	mkdir -p out ;\
+	bipc.sh -p BIPEBIPGenoM3 -d "Compound_BIPE()" --gencpp-no-main --gencpp-cc-extra-src external/BIPmain.cpp --gencpp-cc-I .. --gencpp-cc-I . --gencpp-output-dir out --gencpp-ld-L ${HOME}/work/lib --gencpp-ld-L ../../.libs <'foreach c [dotgen components] {
+set comp [$c name]'> --gencpp-ld-l <"$comp">-bip-ros<'}'> --gencpp-ld-l bip-main-ros --gencpp-ld-l rt --gencpp-cc-I external --gencpp-ld-l pthread)
+
+src/bip/out/Makefile: src/bip/out/CMakeLists.txt 
+	(cd src/bip/out ;\
+	cmake -DCMAKE_BUILD_TYPE=Release CMakeLists.txt)
 
 
 # --- regen ----------------------------------------------------------------
@@ -102,16 +156,16 @@ depend/input.d regen: <"$input">
 $(eval include depend/input.d)
 
 
+
 # --- generated files ------------------------------------------------------
 
 md5_files=
 msg_files=
 
-<'foreach t $types {'>
-<'  if {[catch {$t masquerade ros}]} {'>
-md5_files+=	<"$comp">/msg/<"[rosmsg_cname $t]">.msg.md5
-<'  }'>
-<'}'>
+<"$msg">
+
+<'foreach component [dotgen components] {'>
+<'set comp [$component name]'>
 
 <'
 set actions_prefix {
@@ -128,12 +182,17 @@ md5_files+=	<"$comp">/msg/<"[$s name]"><"$p">.msg.md5
 <'    }'>
 <'  }'>
 <'}'>
+<'}'>
 
 BUILT_SOURCES=	${msg_files} ${md5_files}
+
+<'foreach c [dotgen components] {set comp [$c name]'>
 
 <'foreach p $actions_prefix {'><"$comp">/msg/%<"$p">.msg <'}'>: \
   <"$comp">/action/%.action
 	${GENACTION} -o <"$comp">/msg $<
+
+<'}'>
 
 %.md5.d %.md5: %
 	${MSGMD5}						\
@@ -149,3 +208,5 @@ CLEANFILES=	${BUILT_SOURCES} ${md5_files:=.d}
 
 clean-local:
 	-rm -rf ${ROS_HOME}
+	-rm -rf src/bip/out
+

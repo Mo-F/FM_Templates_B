@@ -37,6 +37,9 @@ lang c
 #include "ros/callback_queue_interface.h"
 #include "actionlib/server/action_server.h"
 
+#include "BIPEactivities.h"
+
+
 /* exception encoding/decoding */
 void		genom_<"$comp">_encodex(std::string &json, genom_event ex,
 			const void *exdetail);
@@ -45,20 +48,12 @@ genom_event	genom_<"$comp">_decodex(const char *json, genom_context self);
 
 /* --- activities ---------------------------------------------------------- */
 
-struct genom_component_data;
-struct genom_exec_task;
+struct genom_<"$comp">_component_data;
+struct genom_<"$comp">_exec_task;
 
-enum genom_activity_status {
-  ACT_VOID,	/* nothing */
-  ACT_INIT,	/* in control task codels */
-  ACT_RUN,	/* managed by exec task, running */
-  ACT_STOP,	/* managed by exec task, stopping */
-  ACT_ETHER	/* result available for control task */
-};
-
-struct genom_activity : public ros::CallbackInterface {
-  genom_component_data *self;	/* component data */
-  genom_exec_task *task;	/* the task for this activity */
+struct genom_<"$comp">_activity : public ros::CallbackInterface {
+  genom_<"$comp">_component_data *self;	/* component data */
+  genom_<"$comp">_exec_task *task;	/* the task for this activity */
 
   int iid;			/* index number */
   int sid;			/* service number, -1 for permanent activity */
@@ -73,26 +68,26 @@ struct genom_activity : public ros::CallbackInterface {
 
   virtual bool gid(const actionlib_msgs::GoalID &gid) const = 0;
 
-  virtual genom_activity_status invoke(void) = 0;
+  //  virtual genom_activity_status invoke(void) = 0;
   virtual void report(void) = 0;
-  virtual int interrupt_other(genom_component_data *self) = 0;
+  virtual int interrupt_other(genom_<"$comp">_component_data *self) = 0;
 
   /* signalled by task at ETHER, invoked by ros global callback queue */
   CallResult call(void);
 };
 
-void	<"$comp">_cntrl_task_signal(genom_activity *a);
+void	<"$comp">_cntrl_task_signal(genom_<"$comp">_activity *a);
 
 template<int taskid /* unused, but here for symmetry with services */>
-struct genom_activity_perm_data : genom_activity {
+struct genom_<"$comp">_activity_perm_data : genom_<"$comp">_activity {
   bool gid(const actionlib_msgs::GoalID &gid) const { return false; }
-  genom_activity_status invoke(void);
+  //  genom_activity_status invoke(void);
   void report(void) {}
-  int interrupt_other(genom_component_data *self) { return 0; }
+  int interrupt_other(genom_<"$comp">_component_data *self) { return 0; }
 };
 
 template<class ActionSpec, class localstype>
-struct genom_activity_data : genom_activity {
+struct genom_<"$comp">_activity_data : genom_<"$comp">_activity {
   typedef typename ActionSpec::_action_goal_type::_goal_type intype;
   typedef typename ActionSpec::_action_result_type::_result_type outype;
 
@@ -105,7 +100,7 @@ struct genom_activity_data : genom_activity {
     return rqst.getGoalID().id == gid.id;
   }
 
-  genom_activity_status invoke(void);
+  //  genom_activity_status invoke(void);
 
   void report(void) {
     if (state == <"$comp">_ether) {
@@ -117,29 +112,29 @@ struct genom_activity_data : genom_activity {
     rqst.setSucceeded(out);
   }
 
-  int interrupt_other(genom_component_data *self);
+  int interrupt_other(genom_<"$comp">_component_data *self);
 };
 
 <'foreach s [$component services] {'>
 <'  if {[$s kind] == "activity"} {'>
-typedef genom_activity_data<
+typedef genom_<"$comp">_activity_data<
   genom::action_<"[$s name]">,
-  genom::srv_<"[$s name]">::locals> genom_activity_service_<"[$s name]">;
+  genom::srv_<"[$s name]">::locals> genom_<"$comp">_activity_service_<"[$s name]">;
 <'  }'>
 <'}'>
 
 <'foreach t [$component tasks] {'>
-typedef genom_activity_perm_data<<"${comp}_[$t name]_TASKID">>
-  genom_activity_task_<"[$t name]">;
+typedef genom_<"$comp">_activity_perm_data<<"${comp}_[$t name]_TASKID">>
+  genom_<"$comp">_activity_task_<"[$t name]">;
 <'}'>
 
 
-struct genom_activities {
+struct genom_<"$comp">_activities {
   static const size_t MAX_ACTIVITIES = 32;
-  genom_activity *a[MAX_ACTIVITIES];
+  genom_<"$comp">_activity *a[MAX_ACTIVITIES];
 
-  genom_event alloc(genom_activity *i);
-  genom_activity *bygid(const actionlib_msgs::GoalID &gid);
+  genom_event alloc(genom_<"$comp">_activity *i);
+  genom_<"$comp">_activity *bygid(const actionlib_msgs::GoalID &gid);
 };
 
 #endif /* H_GROS_<"$COMP">_ACTIVITIES */

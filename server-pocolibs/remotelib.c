@@ -62,7 +62,7 @@ genom_remote_vacall(struct genom_remote *r,
   va_end(ap);
   if (s != OK) {
     int e = errnoGet();
-    genom_log_warn(1, "remote %s send", remote);
+    genom_<"$comp">_log_warn(1, "remote %s send", remote);
     if (H2_SYS_ERR_FLAG(e))
       return genom_syserr(&(genom_syserr_detail){ .code = e }, self);
     else {
@@ -86,7 +86,7 @@ genom_remote_vacall(struct genom_remote *r,
     genom_event ex;
     int e = errnoGet();
     if (e != ERROR) {
-      genom_log_warn(1, "remote %s receive", remote);
+      genom_<"$comp">_log_warn(1, "remote %s receive", remote);
       if (H2_SYS_ERR_FLAG(e))
         return genom_syserr(&(genom_syserr_detail){ .code = e }, self);
       else {
@@ -124,13 +124,13 @@ genom_remote_lookup(struct genom_component_data *self,
       break;
     }
   if (r->id < 0) {
-    genom_log_warn(0, "service %s is not provided by %s", svc, srv);
+    genom_<"$comp">_log_warn(0, "service %s is not provided by %s", svc, srv);
     return genom_no_such_service(&self->context);
   }
 
   /* check interface compatibility */
   if (strcmp(digest, r->meta.services._buffer[r->id].digest)) {
-    genom_log_warn(0, "service %s/%s is incompatible with remote %s",
+    genom_<"$comp">_log_warn(0, "service %s/%s is incompatible with remote %s",
                    srv, svc, remote);
     return genom_no_such_service(&self->context);
   }
@@ -304,7 +304,7 @@ genom_<"$comp">_<"[$r name]">_connect(const char *name, genom_context self)
   strncpy(srv, name, sizeof(srv)); srv[sizeof(srv)-1] = 0;
   svc = strchr(srv, '/');
   if (!svc) {
-    genom_log_warn(0, "remote service %s should be component/service", name);
+    genom_<"$comp">_log_warn(0, "remote service %s should be component/service", name);
     return genom_no_such_service(self);
   }
   *(svc++) = 0;
@@ -314,7 +314,7 @@ genom_<"$comp">_<"[$r name]">_connect(const char *name, genom_context self)
                    sizeof(int), genom_<"$comp">_<"[$r name]">_maxreply_size(),
                    &r->h.csid);
   if (s != OK) {
-    genom_log_warn(1, "component %s could not be found", srv);
+    genom_<"$comp">_log_warn(1, "component %s could not be found", srv);
     r->h.csid = NULL;
     return genom_no_such_service(self);
   }

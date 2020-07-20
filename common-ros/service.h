@@ -17,13 +17,12 @@
 #
 
 # check arguments
-if {[llength $argv] != 1} { error "expected arguments: services" }
-lassign $argv services
+if {[llength $argv] != 2} { error "expected arguments: component services" }
+lassign $argv component services
 
 lang c
 
 # compute handy shortcuts
-set component [dotgen component]
 set comp [$component name]
 set COMP [string toupper [$component name]]
 '>

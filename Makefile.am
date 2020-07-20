@@ -68,6 +68,7 @@ nobase_dist_serverpocolibs_DATA=		\
 	server-pocolibs/exec_task.c		\
 	server-pocolibs/exec_codels.c		\
 	server-pocolibs/main.c			\
+	server-pocolibs/main.h			\
 	server-pocolibs/msglib.c		\
 	server-pocolibs/parameters.h		\
 	server-pocolibs/portlib.h		\
@@ -75,10 +76,16 @@ nobase_dist_serverpocolibs_DATA=		\
 	server-pocolibs/remotelib.h		\
 	server-pocolibs/remotelib.c		\
 	server-pocolibs/genom3_external_for_bip.h\
+	server-pocolibs/genom3_global_external_for_bip.h\
 	server-pocolibs/main.cpp      \
 	server-pocolibs/BIPGenoM3.cpp   	\
 	server-pocolibs/BIPGenoM3.hpp      	\
-	server-pocolibs/BIPGenoM3.bip
+	server-pocolibs/BIPGenoM3.bip		\
+	server-pocolibs/global_functions.c			\
+	server-pocolibs/global_functions.cpp			\
+	server-pocolibs/global_functions.hpp			\
+	server-pocolibs/genom3-external.h
+
 
 # --- common ros ---------------------------------------------------------------
 
@@ -115,24 +122,30 @@ nobase_dist_serverros_DATA=		\
 	server-ros/ros.configure.ac		\
 	server-ros/ros.Makefile.am		\
 					\
+	server-ros/BIPEactivities.h		\
 	server-ros/activities.h		\
 	server-ros/codels.mappings.h	\
+	server-ros/BIPEinternals.h		\
 	server-ros/internals.h		\
 	server-ros/locals.h			\
 	server-ros/remote.h			\
 	server-ros/port.h			\
 					\
 	server-ros/activities.cc		\
+	server-ros/BIPEcontrol-task.cc		\
 	server-ros/control-task.cc		\
 	server-ros/control-codels.cc	\
 	server-ros/exception.cc		\
 	server-ros/exec-task.cc		\
 	server-ros/main.cc			\
+	server-ros/BIPEmain.cc			\
 	server-ros/remote.cc		\
 	server-ros/port.cc			\
 	server-ros/json.cc			\
 					\
+	server-ros/BIPEgenom3_external_for_bip.h\
 	server-ros/genom3_external_for_bip.h\
+	server-ros/BIPmain.cpp      	\
 	server-ros/BIPGenoM3.cpp      	\
 	server-ros/BIPGenoM3.hpp      	\
 	server-ros/BIPGenoM3.bip

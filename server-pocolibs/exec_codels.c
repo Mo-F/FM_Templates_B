@@ -85,7 +85,7 @@ BIP_<"$comp">_codel_<"$func">(struct genom_activity *a)
 {
   genom_event s;
   struct genom_component_data *self = <"$comp">_genom_component;
-  genom_log_info("Calling <"$comp">_codel_<"$func">  codel.");
+  genom_<"$comp">_log_info("Calling <"$comp">_codel_<"$func">  codel.");
 
   s = <"$comp">_codel_<"$func">(self, a);
 
@@ -155,11 +155,11 @@ BIP_<"$comp">_codel_<"$func">(struct genom_<"$comp">_<"[$obj name]">_activity *a
   genom_event s;
   struct genom_component_data *self = <"$comp">_genom_component;
 
-  genom_log_info("Calling <"$comp">_codel_<"$func"> codel.");
+  genom_<"$comp">_log_info("Calling <"$comp">_codel_<"$func"> codel.");
   s = <"$comp">_codel_<"$func">(self, a);
 
   a->h.state = s;
-  genom_log_info("Exiting <"$comp">_codel_<"$func"> codel with %s.", s);
+  genom_<"$comp">_log_info("Exiting <"$comp">_codel_<"$func"> codel with %s.", s);
   return s;
 }
 

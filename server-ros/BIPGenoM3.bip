@@ -753,8 +753,10 @@ atom type TIMER_<"[$t name]">_<"$comp">()
 
 	on tick
 	from loop to loop
-	provided (c >= <"[expr [[$t period] value]*$slowdown*1000000]">)
+	
+	//provided (c >= <"[expr [[$t period] value]*$slowdown*1000000]">)
 	do { c = 0; }
+	resume (c <= <"[expr [[$t period] value]*$slowdown*1000]">)
 
 //	invariant inv at loop provided (c <= <"[expr [[$t period] value]*$slowdown*1000000]">)
 end
@@ -929,12 +931,15 @@ foreach n $nostop {'>
 	export port Port inter_1_<"$n">_2()
 	export port Port inter_2_<"$n">_2()<'}'>
 	
-	place idle, <'
+	place <'if {![catch {$t period}]} {'>idle, <'}
 if {[llength [$t codels]]} {'>start_perm, end_perm, <'}
 foreach s [$t services] {'>start_<"[$s name]">_1, end_<"[$s name]">_1, start_<"[$s name]">_2, end_<"[$s name]">_2, <'}
 foreach n $nostop {'>interrupt_<"$n">_1, interrupt_<"$n">_2, <'}'>finish
 	
-	initial to idle
+	initial to <'if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
 	
 <'if {![catch {$t period}]} {'>
 	on tick
@@ -956,13 +961,17 @@ if {[llength [$t codels]]} {'>
 	on cycle_perm
 	from end_perm to <'
 	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
-	} else {'>idle<'}'>
+	} else {
+		if {![catch {$t period}]} {'>idle<'
+				} else {'>start_perm<'}}'>
 	//resume
 	
 	on skip_perm
 	from start_perm to <'
 	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
-	} else {'>idle<'}'>
+	} else {
+		if {![catch {$t period}]} {'>idle<'
+				} else {'>start_perm<'}}'>
 	//eager
 	//resume
 	
@@ -1041,13 +1050,23 @@ foreach n $nostop {'>
 if {[llength [$t services]]} {'>
 	
 	on skipall
-	from start_<"[[lindex [$t services] 0] name]">_1 to idle
+	from start_<"[[lindex [$t services] 0] name]">_1 to <'
+	if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
+	
 	//eager
 	//resume
 <'}'>
 
 	on ended
-	from finish to idle
+	from finish to <'
+	if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
+	
 	//eager
 	//resume
 	

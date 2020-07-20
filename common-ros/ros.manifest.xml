@@ -2,27 +2,33 @@
 lang c
 
 # check arguments
-if {[llength $argv] != 1} { error "expected arguments: types" }
-lassign $argv types
+if {[llength $argv] != 2} { error "expected arguments: component types" }
+lassign $argv component types
+
 
 # compute handy shortcuts
-set component [dotgen component]
 set comp [$component name]
 
-if {[catch {$component doc} brief]} {
-  set brief $comp
+if {[catch {$component doc} doc]} {
+  set doc $comp
+}
+set brief [lindex [split $doc "\n"] 0]
+
+# quote for xml
+proc quote { string } {
+  string map {
+    \" &quot; ' &apos;
+    < &lt; > &gt;
+    & &amp;
+  } $string
 }
 '>
 <package>
-  <description brief="<"$brief">" >
-    <"$brief">
+  <description brief="<"[quote $brief]">" >
+<"[quote $doc]">
   </description>
 <'if {![catch {dotgen input notice} notice]} {'>
-  <license><"[string map {
-  \" &quot; ' &apos;
-  < &lt; > &gt;
-  & &amp;
-} $notice]"></license>
+  <license><"[quote $notice]"></license>
 <'}'>
 <'if {![catch {$component email} email]} {'>
   <author><"$email"></author>

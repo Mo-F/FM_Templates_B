@@ -48,6 +48,9 @@ lang c
 <'}'>
 #define <"$comp">_NTASKID	(<"$i">)
 
+#include "genom3/c/context.h"
+#include "BIPEinternals.h"
+
 #include "<"$comp">_port.h"
 #include "<"$comp">_remote.h"
 #include "<"$comp">_service.h"
@@ -56,12 +59,8 @@ lang c
 #include "<"$comp">_activities.h"
 
 
-/* --- context ------------------------------------------------------------- */
-
-struct genom_component_data;
-
 struct genom_context_data {
-  genom_component_data *self;
+  genom_<"$comp">_component_data *self;
 
   genom_event ex;
   void *exdetail;
@@ -71,7 +70,7 @@ struct genom_context_data {
 
 /* --- tasks --------------------------------------------------------------- */
 
-struct genom_exec_task {
+struct genom_<"$comp">_exec_task {
   genom_context_iface context;
   genom_context_data context_data;
   pthread_t id;
@@ -79,17 +78,18 @@ struct genom_exec_task {
   uint8_t num;
 
   genom_state_rusage rusage;
-  pthread_spinlock_t rlock;
+  // I comment part of the structure which is probably not needed anymore.
+  //  pthread_spinlock_t rlock;
 
   bool wakeup; /* periodic tasks */
   bool runnable, shutdown;
-  genom_activity *permanent;
-  genom_activities activities;
-  pthread_mutex_t lock;
-  pthread_cond_t sync;
+  genom_<"$comp">_activity *permanent;
+  genom_<"$comp">_activities activities;
+  //  pthread_mutex_t lock;
+  //  pthread_cond_t sync;
 
-  void	spawn(genom_component_data *self,
-              const char *name, void *(*start)(void *));
+  void	spawn(genom_<"$comp">_component_data *self,
+	      const char *name, void *(*start)(void *));
 };
 
 int	<"$comp">_cntrl_task(const char *instance);
@@ -100,7 +100,10 @@ void *	<"$comp">_<"[$t name]">_task(void *data);
 
 /* --- internal state ------------------------------------------------------ */
 
-struct genom_component_data {
+struct genom_<"$comp">_component_data {
+
+    genom_component_data *bipe_comp;
+
 <'if {![catch {$component ids} ids]} {'>
   <"[$ids declarator ids]">;
 <'}'>
@@ -113,14 +116,15 @@ struct genom_component_data {
   } ports;
 
   int genom_state_init(void);
-  int genom_state_update(genom_exec_task *task);
+  int genom_state_update(genom_<"$comp">_exec_task *task);
   int genom_state_refresh(void);
+  void spawn_bip_proxi(void);
 
 
   /* exec tasks */
   struct {
 <'foreach t [$component tasks] {'>
-    genom_exec_task <"[$t name]">_;
+    genom_<"$comp">_exec_task <"[$t name]">_;
 <'}'>
   } tasks;
 
@@ -129,26 +133,27 @@ struct genom_component_data {
     genom_context_iface context;
     genom_context_data context_data;
 
-    ros::NodeHandle *node;
-    ros::CallbackQueue *queue;
+    ros::NodeHandle *node;	/* This is a pointer on the global node */
+    //    ros::CallbackQueue queueStr; /* The queue for this component. */
+    ros::CallbackQueue *queue;	/* A pointer to the above. */
+    
+    bool rqst_rcv,bip_proxi_idle;		
+
+    void *bip_event_port; /* This is the BIP port which get the request. */
+
+    int current_rqst_type;	/* with ROS, only one of the these at once. */
+    void *current_activity;	/* with ROS, only one handle at once. */
+    genom_event current_rqst_return;	/* with ROS, only one of the these at once. */
+    
+    pthread_mutex_t bip_proxi;
+    pthread_t bip_proxi_t;
+    pthread_t control_task_t;
+    pthread_mutex_t lock;
+    pthread_cond_t serv_bip_proxi;
+    pthread_cond_t sync;
 
     bool run_map[<"$COMP">_NRQSTID];
-    pthread_mutex_t lock;
-    pthread_cond_t sync;
   } control;
-
-  /* mutual exclusion for resource access */
-  struct {
-    int all;				/* all resources locked */
-    void *control;			/* control task codel/service */
-<'foreach t [$component tasks] {'>
-    void *task_<"[$t name]">;		/* <"[$t name]"> codel */
-<'}'>
-
-    unsigned int q, qnext;		/* fifo (ticket lock) */
-    pthread_mutex_t lock;
-    pthread_cond_t sync;
-  } resources;
 
   /* remote services */
   struct {
@@ -161,7 +166,10 @@ struct genom_component_data {
   struct {
 <'foreach s [$component services] {'>
 <'  if {[catch {$s task} t]} {'>
-    ros::ServiceServer <"[$s name]">_;
+    ros::ServiceServer <"[$s name]">_; /* This is where I save the args and locals for BIP to pick them up */
+    genom::srv_<"[$s name]">::locals <"[$s name]">_locals;
+    genom::srv_<"[$s name]">::input <"[$s name]">_in;
+    genom::srv_<"[$s name]">::output <"[$s name]">_out;
 <'  } else {'>
     actionlib::ActionServer< genom::action_<"[$s name]"> > *<"[$s name]">_;
 <'  }'>
@@ -169,8 +177,11 @@ struct genom_component_data {
   } services;
 
 <'foreach s [$component services] {'>
-  static void <"[$s name]">_resource(void) {}
   genom_event <"[$s name]">_controlcb(
+    genom::srv_<"[$s name]">::locals &locals,
+    genom::srv_<"[$s name]">::input &in,
+    genom::srv_<"[$s name]">::output &out);
+  genom_event <"[$s name]">_validatecb(
     genom::srv_<"[$s name]">::locals &locals,
     genom::srv_<"[$s name]">::input &in,
     genom::srv_<"[$s name]">::output &out);
@@ -187,39 +198,20 @@ struct genom_component_data {
 <'  }'>
 
 <'}'>
-
-  void	activity_report(genom_activity *a);
-
-<'if {![catch {$component clock-rate} rate]} {'>
-  /* timer */
-  timer_t clock;
-  pthread_t clockthread;
-  static void *timercb(void *data);
-<'}'>
+   void  spawn_control_task(void);
+  void	activity_report(genom_<"$comp">_activity *a);
 };
 
-/* resource access */
-#define genom_take_resource(self, wait, set) do {                       \
-    pthread_mutex_lock(&(self)->resources.lock);                        \
-    unsigned int q = (self)->resources.qnext++;                         \
-    while(q != self->resources.q || (wait))                             \
-      pthread_cond_wait(&(self)->resources.sync,                        \
-                        &(self)->resources.lock);                       \
-    set;                                                                \
-    (self)->resources.q++;                                              \
-    pthread_mutex_unlock(&self->resources.lock);                        \
-  } while(0)
 
-#define genom_give_resource(self, set) do {                             \
-    pthread_mutex_lock(&(self)->resources.lock);                        \
-    set;                                                                \
-    pthread_cond_broadcast(&self->resources.sync);                      \
-    pthread_mutex_unlock(&self->resources.lock);                        \
-  } while(0)
-
+/* global component */
+extern struct genom_<"$comp">_component_data *<"$comp">_genom_component;
 
 /* global shutdown flag */
-extern int genom_shutdown;
+//extern int <"$comp">_genom_shutdown;
+
+/* some function declaration... */
+struct genom_<"$comp">_component_data *genom_<"$comp">_init(const char *instance);
+
 
 /* exceptions */
 extern "C" {
@@ -230,11 +222,11 @@ const void *	ros_server_raised(genom_event *ex,
 }
 
 /* log functions */
-void	genom_log_info(const char *format, ...)
+void	genom_<"$comp">_log_info(const char *format, ...)
   __attribute__ ((format (printf, 1, 2)));
-void	genom_log_warn(const char *format, ...)
+void	genom_<"$comp">_log_warn(const char *format, ...)
   __attribute__ ((format (printf, 1, 2)));
-void	genom_log_debug(const char *format, ...)
+void	genom_<"$comp">_log_debug(const char *format, ...)
   __attribute__ ((format (printf, 1, 2)));
 
 #endif /* H_GROS_<"$COMP">_INTERNALS */

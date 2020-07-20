@@ -34,6 +34,7 @@ lang c
 #include "csLib.h"
 #include "semLib.h"
 
+#include "main.h"
 #include "<"$comp">_c_types.h"
 #include "<"$comp">_parameters.h"
 #include "<"$comp">_msglib.h"
@@ -54,7 +55,7 @@ extern struct genom_component_data *<"$comp">_genom_component;
 
 /* --- internal state ------------------------------------------------------ */
 
-extern const char *genom_instance;
+extern const char *<"$comp">_genom_instance;
 
 struct genom_component_data;
 
@@ -109,7 +110,7 @@ struct genom_component_data {
 
 
 /* control task */
-void *	genom_<"$comp">_init(void);
+//void *	genom_<"$comp">_init(void); declared in main.h to be visible both here and in main.c
 void	genom_<"$comp">_fini(void *data);
 /* void	genom_<"$comp">_schedule_cntrl(struct genom_component_data *self); */
 
@@ -167,19 +168,19 @@ void genom_<"$comp">_<"[$s name]">_activity_report(struct genom_component_data *
 						   struct genom_<"$comp">_<"[$s name]">_activity *a);
 <'}'>
 
-/* exceptions */
-genom_event	genom_pocolibs_raise(genom_event ex, void *detail, size_t size,
-                        genom_context self);
-const void *	genom_pocolibs_raised(genom_event *ex, genom_context self);
-
-
 /* log functions */
-void	genom_log_info(const char *format, ...)
+void	genom_<"$comp">_log_info(const char *format, ...)
   __attribute__ ((format (printf, 1, 2)));
-void	genom_log_warn(int h2error, const char *format, ...)
+void	genom_<"$comp">_log_warn(int h2error, const char *format, ...)
   __attribute__ ((format (printf, 2, 3)));
-void	genom_log_debug(const char *format, ...)
+void	genom_<"$comp">_log_debug(const char *format, ...)
   __attribute__ ((format (printf, 1, 2)));
+
+/* exceptions */
+genom_event	genom_<"$comp">_pocolibs_raise(genom_event ex, void *detail, size_t size,
+                        genom_context self);
+const void *	genom_<"$comp">_pocolibs_raised(genom_event *ex, genom_context self);
+
 
 
 #endif /* H_<"$COMP">_CONTROL_TASK */

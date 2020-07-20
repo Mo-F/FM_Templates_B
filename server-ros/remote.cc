@@ -17,10 +17,11 @@
 #
 #
 
-lang c
+
+if {[llength $argv] != 1} { error "expected arguments: component" }
+lassign $argv component
 
 # compute handy shortcuts
-set component [dotgen component]
 set comp [$component name]
 set COMP [string toupper [$component name]]
 '>

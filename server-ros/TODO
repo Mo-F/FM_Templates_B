@@ -1,9 +1,11 @@
-This file contains stuff I think we need to provide in the genom3 library for the BIP Engine.
+This file contains stuff we need to address to properly work with the BIP Engine.
 
-DONE - permament actvity global for BIPE to grab.
-DONE - we need to make sure that the "ONE" slot we have for an activity in the control task is enough (unlikely).
-control task now has an activity table (with 16 elements).
+(Fixed) - reinstall kill in the BIP model... so we can quit properly.
+- why is it that kill, abort and connect_service are not "defined"
+  (the later, ok, but the 2 first are useful), this is be the case in
+  both template (ROS and PocoLibs), so is this an optimization of the
+  model, or there is a justification for this.
 
-- we need to clarify the whole h2initglob, taskFromThread(tname)... according to Anthony, h2initGlob should 
-  always be the first call, and it covers the main thread, but it is not even clear if the event port thread 
-  is not created before they call us... Need to check with Jacques.
+
+- I realize that WCET for system control rqsts cannot be given in the
+  .gen model... another good reason to have these outside the .gen

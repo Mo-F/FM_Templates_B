@@ -33,6 +33,8 @@ extern "C"  {
 #ifndef H_<"$COMP">_GENOM3_EXTERNAL_FOR_BIP
 #define H_<"$COMP">_GENOM3_EXTERNAL_FOR_BIP
 
+#include "genom3_global_external_for_bip.h"
+
 // GenoM3 types which need to be known by BIP
 
 typedef const char *genom_event;
@@ -90,13 +92,6 @@ genom_event BIP_<"$comp">_codel_<"$func">(genom_<"$comp">_<"[$obj name]">_activi
 int c_BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const genom_activity_ptr);
 <'}'>
 
-
-int c_BIP_genom_ok_p(const genom_event e);
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-int c_BIP_<"[$e cname]">_p(const genom_event);
-<'}'>
-<'}'>
 
 /* BIP function to return an exec task permanent activity */
 <'foreach t [$component tasks] {'>

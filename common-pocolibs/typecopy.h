@@ -1,6 +1,6 @@
 <'
 #
-# Copyright (c) 2012-2014 LAAS/CNRS
+# Copyright (c) 2012-2014,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Redistribution  and  use  in  source  and binary  forms,  with  or  without
@@ -82,10 +82,25 @@ genom_tinit_<"[$t mangle]">(<"[$t argument reference data]">)
     fixed+string {'>
   *data = '\0';
 <'    }'>
-<'    *+struct - *+union - *+exception {'>
+<'    *+struct - *+exception {'>
+<'      if {![llength [$t members]]} {'>
+  (void)data; /* fix -Wunused-parameter */
+<'      }'>
 <'      foreach e [$t members] {'>
   genom_tinit_<"[$e mangle]">(<"[$e pass reference data->[$e name]]">);
 <'      }'>
+<'    }'>
+<'    *+union {'>
+<'      foreach first [$t members] {'>
+<'        foreach v [$first value] { if {$v != ""} break }'>
+<'        if {$v != ""} break'>
+<'      }'>
+  genom_tinit_<"[[$t disc] mangle]">(<"[[$t disc] pass reference data->_d]">);
+<'      if {$v != ""} {'>
+  data->_d = <"[language::cname $v]">;
+<'      }'>
+  genom_tinit_<"[$first mangle]">(
+    <"[$first pass reference data->_u.[$first name]]">);
 <'    }'>
 <'    *+optional {'>
   genom_tinit_<"[[$t type] mangle]">(<"[[$t type] pass reference data->_value]">);
@@ -95,10 +110,11 @@ genom_tinit_<"[$t mangle]">(<"[$t argument reference data]">)
   for (i=0; i<<"[$t length]">; i++)
     genom_tinit_<"[[$t type] mangle]">(
       <"[[$t type] pass reference {data[i]}]">);
-<'
-    }
-  }
-'>
+<'    }'>
+<'    default {'>
+  (void)data; /* fix -Wunused-parameter */
+<'    }'>
+<'  }'>
 }
 
 static __inline__ void
@@ -135,10 +151,29 @@ genom_tfini_<"[$t mangle]">(<"[$t argument reference data]">)
     *data = NULL;
   }
 <'    }'>
-<'    *+struct - *+union - *+exception {'>
+<'    *+struct - *+exception {'>
+<'      if {![llength [$t members]]} {'>
+  (void)data; /* fix -Wunused-parameter */
+<'      }'>
 <'      foreach e [$t members] {'>
   genom_tfini_<"[$e mangle]">(<"[$e pass reference data->[$e name]]">);
 <'      }'>
+<'    }'>
+<'    *+union {'>
+  switch(data->_d) {
+<'      foreach e [$t members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+    case <"[language::cname $v]">:
+<'          } else {'>
+    default:
+<'          }'>
+<'        }'>
+      genom_tfini_<"[$e mangle]">(<"[$e pass reference data->_u.[$e name]]">);
+      break;
+<'      }'>
+  }
+  genom_tfini_<"[[$t disc] mangle]">(<"[[$t disc] pass reference data->_d]">);
 <'    }'>
 <'    *+optional {'>
   genom_tfini_<"[[$t type] mangle]">(<"[[$t type] pass reference data->_value]">);
@@ -148,10 +183,11 @@ genom_tfini_<"[$t mangle]">(<"[$t argument reference data]">)
   for (i=0; i<<"[$t length]">; i++)
     genom_tfini_<"[[$t type] mangle]">(
       <"[[$t type] pass reference {data[i]}]">);
-<'
-    }
-  }
-'>
+<'    }'>
+<'    default {'>
+  (void)data; /* fix -Wunused-parameter */
+<'    }'>
+<'  }'>
 }
 
 static __inline__ int
@@ -187,6 +223,8 @@ genom_tcopy_<"[$t mangle]">(<"[$t argument reference dst]">,
 <'    fixed+struct - fixed+union - fixed+exception {'>
 <'      if {[llength [$t members]]} {'>
   memcpy(dst, src, sizeof(<"[$t declarator]">));
+<'      } else {'>
+  (void)dst; (void)src; /* fix -Wunused-parameter */
 <'      }'>
   return 0;
 <'    }'>
@@ -206,18 +244,44 @@ genom_tcopy_<"[$t mangle]">(<"[$t argument reference dst]">,
   <"[$t dereference reference dst]"> = <"[$t dereference value src]">;
   return 0;
 <'    }'>
-<'    variable+struct - variable+union - variable+exception {'>
+<'    variable+struct - variable+exception {'>
+<'      if {[llength [$t members]]} {'>
   int s;
-<'
-      foreach e [$t members] {'>
+<'        foreach e [$t members] {'>
   s = genom_tcopy_<"[$e mangle]">(
     <"[$e pass reference dst->[$e name]]">,
     <"[$e pass value src->[$e name]]">);
   if (s) return s;
-<'
-      }
-    }
-    variable+sequence {'>
+<'        }'>
+<'      } else {'>
+  (void)dst; (void)src; /* fix -Wunused-parameter */
+<'      }'>
+  return 0;
+<'    }'>
+<'    variable+union {'>
+  int s;
+  switch(data->_d) {
+<'      foreach e [$t members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+    case <"[language::cname $v]">:
+<'          } else {'>
+    default:
+<'          }'>
+<'        }'>
+      s = genom_tcopy_<"[$e mangle]">(
+        <"[$e pass reference dst->_u.[$e name]]">,
+        <"[$e pass value src->_u.[$e name]]">);
+      if (s) return s;
+      break;
+<'      }'>
+  }
+  s = genom_tcopy_<"[[$t disc] mangle]">(
+    <"[[$t disc] pass reference dst->_d]">,
+    <"[[$t disc] pass value src->_d]">);
+  return s;
+<'    }'>
+<'    variable+sequence {'>
   int s;
   uint32_t i;
 <'      if {[catch {$t length}]} {'>

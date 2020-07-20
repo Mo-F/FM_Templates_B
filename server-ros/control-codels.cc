@@ -29,21 +29,22 @@ lang c
 
 #include "<"$comp">_internals.h"
 #include "<"$comp">_typecopy.h"
+#include "<"$comp">_genom3_external_for_bip.h"
 
 
-/* --- genom_abort_activity_codel ------------------------------------------ */
+/* --- genom_<"$comp">_abort_activity_codel ------------------------------------------ */
 
 genom_event
-genom_abort_activity_codel(uint32_t activity, genom_context ctx)
+genom_<"$comp">_abort_activity_codel(uint32_t activity, genom_context ctx)
 {
 <'foreach t [$component tasks] {'>
   /* task <"[$t name]"> */
   {
-    genom_component_data *self = ctx->data->self;
-    genom_activity *a;
+    genom_<"$comp">_component_data *self = ctx->data->self;
+    genom_<"$comp">_activity *a;
 
-    pthread_mutex_lock(&self->tasks.<"[$t name]">_.lock);
-    for(size_t id = 0; id < genom_activities::MAX_ACTIVITIES; id++) {
+    //    pthread_mutex_lock(&self->tasks.<"[$t name]">_.lock);
+    for(size_t id = 0; id < genom_<"$comp">_activities::MAX_ACTIVITIES; id++) {
       a = self->tasks.<"[$t name]">_.activities.a[id];
       if (!a) continue;
 
@@ -54,16 +55,16 @@ genom_abort_activity_codel(uint32_t activity, genom_context ctx)
           if ((uint32_t/*oops*/)a->aid != activity) continue;
           a->stop = 1;
           a->interruptedby = "abort_activity";
-          pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
+	  //          pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
           return genom_ok;
 
         case ACT_STOP: case ACT_ETHER:
           if ((uint32_t/*oops*/)a->aid != activity) continue;
-          pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
+	  //          pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
           return genom_ok;
       }
     }
-    pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
+    //    pthread_mutex_unlock(&self->tasks.<"[$t name]">_.lock);
   }
 
 <'}'>
@@ -71,24 +72,16 @@ genom_abort_activity_codel(uint32_t activity, genom_context ctx)
 }
 
 
-/* --- genom_connect_port_codel -------------------------------------------- */
+/* --- genom_<"$comp">_connect_port_codel -------------------------------------------- */
 
 /** Implement connect_port service codel */
 genom_event
-genom_connect_port_codel(const char local[128], const char remote[128],
+genom_<"$comp">_connect_port_codel(const char local[128], const char remote[128],
                          genom_context ctx)
 {
-  genom_component_data *self = ctx->data->self;
+  genom_<"$comp">_component_data *self = ctx->data->self;
   genom_event s;
 
-  genom_take_resource(
-    self,
-<'foreach t [$component tasks] {'>
-    self->resources.task_<"[$t name]"> ||
-<'}'>
-    self->resources.all,
-
-    self->resources.all = 1);
 
 <'foreach p [$component ports in simple] {'>
   if (!strcmp(local, "<"[$p name]">")) {
@@ -114,28 +107,19 @@ genom_connect_port_codel(const char local[128], const char remote[128],
   goto done;
 
 done:
-  genom_give_resource(self, self->resources.all = 0);
   return s;
 }
 
 
-/* --- genom_connect_remote_codel ------------------------------------------ */
+/* --- genom_<"$comp">_connect_remote_codel ------------------------------------------ */
 
 genom_event
-genom_connect_remote_codel(const char local[128], const char remote[128],
+genom_<"$comp">_connect_remote_codel(const char local[128], const char remote[128],
                            genom_context ctx)
 {
-  genom_component_data *self = ctx->data->self;
+  genom_<"$comp">_component_data *self = ctx->data->self;
   genom_event s;
 
-  genom_take_resource(
-    self,
-<'foreach t [$component tasks] {'>
-    self->resources.task_<"[$t name]"> ||
-<'}'>
-    self->resources.all,
-
-    self->resources.all = 1);
 
   /* find the remote */
 <'foreach r [$component remotes] {'>
@@ -149,17 +133,16 @@ genom_connect_remote_codel(const char local[128], const char remote[128],
   goto done;
 
 done:
-  genom_give_resource(self, self->resources.all = 0);
   return s;
 }
 
 
-/* --- genom_kill_codel ---------------------------------------------------- */
+/* --- genom_<"$comp">_kill_codel ---------------------------------------------------- */
 
 genom_event
-genom_kill_codel(genom_context self)
+genom_<"$comp">_kill_codel(genom_context self)
 {
-  genom_shutdown = 1;
+  BIPE_genom_shutdown = 1;	// this is a global
   return genom_ok;
 }
 
@@ -169,7 +152,7 @@ genom_kill_codel(genom_context self)
 /* <"[--- Service [$s name] control codels ------------------------------]"> */
 
 genom_event
-genom_component_data::<"[$s name]">_controlcb(
+genom_<"$comp">_component_data::<"[$s name]">_validatecb(
   genom::srv_<"[$s name]">::locals &locals,
   genom::srv_<"[$s name]">::input &in,
   genom::srv_<"[$s name]">::output &out)
@@ -194,16 +177,6 @@ genom_component_data::<"[$s name]">_controlcb(
   /* call validate codel */
 <'  if {[llength [$s validate]]} {'>
 <'    set validate [$s validate]'>
-  genom_take_resource(
-    this,
-<'    foreach m [$validate mutex] {'>
-<'      if {[$m class] ne "codel"} continue'>
-<'      if {[catch {$m task} t]} continue'>
-    resources.task_<"[$t name]"> == <"[$m cname]"> ||
-<'      }'>
-    resources.all,
-
-    resources.control = (void *)<"[$validate cname]">);
 <'    # build parameter list
     set plist [list]
     foreach p [[$s validate] parameters] {
@@ -228,25 +201,30 @@ genom_component_data::<"[$s name]">_controlcb(
     lappend plist &control.context
 '>
   s = <"[$validate invoke $plist]">;
-  genom_give_resource(this, resources.control = NULL);
 
-  genom_log_debug("service <"[$s name]"> validation returned %s", s?s:"ok");
-  if (s) return s;
+  out.genom_success = s == genom_ok;
+  if (!out.genom_success)
+    genom_<"$comp">_encodex(out.genom_exdetail, s,
+                   control.context.raised(NULL, &control.context));
+  
+  genom_<"$comp">_log_info("service <"[$s name]"> validation returned %s", s?s:"ok");
+
+  return s;
 <'  }'>
+}
+
+
+genom_event
+genom_<"$comp">_component_data::<"[$s name]">_controlcb(
+  genom::srv_<"[$s name]">::locals &locals,
+  genom::srv_<"[$s name]">::input &in,
+  genom::srv_<"[$s name]">::output &out)
+{
+  genom_event s = genom_ok;
 
   /* copy ids parameters to ids (attributes) */
 <'  foreach p [$s parameters] {'>
 <'    if {[$p src] == "ids"} {'>
-  genom_take_resource(
-    this,
-<'      foreach m [$s mutex] {'>
-<'        if {[$m class] ne "codel"} continue'>
-<'        if {[catch {$m task} t]} continue'>
-    resources.task_<"[$t name]"> == <"[$m cname]"> ||
-<'      }'>
-    resources.all,
-
-    resources.control = (void *)<"[$s name]_resource">);
 <'      foreach p [$s parameters in inout] {'>
 <'        if {[$p src] == "ids"} {'>
   genom::ids::pcopy(ids<"[$p member]">, in.<"[$p name]">);
@@ -257,23 +235,12 @@ genom_component_data::<"[$s name]">_controlcb(
   genom::ids::pcopy(out.<"[$p name]">, ids<"[$p member]">);
 <'        }'>
 <'      }'>
-  genom_give_resource(this, resources.control = NULL);
 <'      break'>
 <'    }'>
 <'  }'>
 
   /* call simple codels */
 <'foreach c [$s codels simple] {'>
-  genom_take_resource(
-    this,
-<'  foreach m [$c mutex] {'>
-<'    if {[$m class] ne "codel"} continue'>
-<'    if {[catch {$m task} t]} continue'>
-    resources.task_<"[$t name]"> == <"[$m cname]"> ||
-<'  }'>
-    resources.all,
-
-    resources.control = (void *)<"[$c cname]">);
 <'  # build parameter list
     set plist [list]
     foreach p [$c parameters] {
@@ -297,11 +264,31 @@ genom_component_data::<"[$s name]">_controlcb(
     }
     lappend plist &control.context
 '>
-  s = <"[$c invoke $plist]">;
-  genom_give_resource(this, resources.control = NULL);
 
-  genom_log_debug("service %s codel %s returned %s",
+<' switch -- [$s name] {
+   connect_service {'>
+   s = genom_<"$comp">_connect_remote_codel(in.local, in.remote, &control.context);
+<' }
+   abort_activity {'>
+   s = genom_<"$comp">_abort_activity_codel(in.activity, &control.context);
+<' }
+    connect_port {'>
+   s = genom_<"$comp">_connect_port_codel(in.local, in.remote, &control.context);
+<' } 
+   kill { '>
+   s = genom_<"$comp">_kill_codel(&control.context);
+<' } 
+   default {'>
+   s = <"[$c invoke $plist]">;	/* normal */
+<' }
+ }'>
+
+   //   s = <"[$c invoke $plist]">;
+
+  genom_<"$comp">_log_debug("service %s codel %s returned %s",
                   "<"[$s name]">", "<"[$c name]">", s?s:"ok");
+
+
   if (s
 <'  foreach t [$s throw] {'>
     && s != <"[$t cname]">_id
@@ -309,16 +296,140 @@ genom_component_data::<"[$s name]">_controlcb(
     ) {
     genom_unkex_detail d;
     strncpy(d.what, s, sizeof(d.what)); d.what[sizeof(d.what)-1] = *"";
-    genom_log_warn(
+    genom_<"$comp">_log_warn(
       "unknown exception %s for codel %s in service %s",
       s, "<"[$c name]">", "<"[$s name]">");
     s = genom_unkex(&d, &control.context);
   }
+
+  out.genom_success = s == genom_ok;
+  if (!out.genom_success)
+    genom_<"$comp">_encodex(out.genom_exdetail, s,
+                   control.context.raised(NULL, &control.context));
+
+  if (out.genom_success) {
+    control.run_map[<"$COMP">_<"[$s name]">_RQSTID] = true;
+    <"[$s name]">_interrupt_other(-1);
+  }
+
+  genom_<"$comp">_log_debug("service <"[$s name]"> control returned %s", s?s:"ok");
+  
   if (s) return s;
 <'  }'>
 
   return s;
 }
+
 <'}'>
+
+<'foreach s [$component services] {'>
+
+genom_event  BIP_<"$comp">_<"[$s name]">_validate(int rqid)
+{
+  struct genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+  genom_event s;
+
+  genom_<"$comp">_log_info("BIP calling validate codel for <"$comp"> <"[$s name]">.");
+
+  assert (rqid == self->control.current_rqst_type);
+<'  if {[catch {$s task} t]} {'>
+   s = self->genom_<"$comp">_component_data::<"[$s name]">_validatecb(self->services.<"[$s name]">_locals,
+							    self->services.<"[$s name]">_in,
+							    self->services.<"[$s name]">_out);
+<'  } else {'>
+   genom_<"$comp">_activity_service_<"[$s name]"> *a = (genom_<"$comp">_activity_service_<"[$s name]"> *)self->control.current_activity;
+   s = self->genom_<"$comp">_component_data::<"[$s name]">_validatecb(a->locals,
+							    a->in,
+							    a->out);
+<'  }'>
+   self->control.current_rqst_return = s;
+   return s;
+}
+
+<'  if {[catch {$s task} t]} {'>
+genom_event  BIP_<"$comp">_<"[$s name]">_control(int rqid)
+{
+  struct genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+  genom_event s;
+
+  genom_<"$comp">_log_info("BIP calling control codel for <"$comp"> <"[$s name]">.");
+
+  assert (rqid == self->control.current_rqst_type);
+  s = self->genom_<"$comp">_component_data::<"[$s name]">_controlcb(self->services.<"[$s name]">_locals,
+							  self->services.<"[$s name]">_in,
+							  self->services.<"[$s name]">_out);
+   self->control.current_rqst_return = s;
+
+   return s;
+}
+<'  }'>
+
+<'if {[$s kind] == "activity"} {'>
+void BIP_<"$comp">_<"[$s name]">_activity_report(genom_activity_<"$comp">_<"[$s name]">_ptr a)
+{
+  genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+  genom_<"$comp">_log_info("BIP finished and reporting for <"$comp"> <"[$s name]"> activity.");
+
+  self->activity_report((genom_<"$comp">_activity *)a);
+
+  return;
+}
+<'}'>
+
+void BIP_<"$comp">_<"[$s name]">_rqst_report(int rqid)
+{
+  genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+
+  assert (rqid == self->control.current_rqst_type);
+  
+  genom_<"$comp">_log_info("BIP finished and reporting for <"$comp"> <"[$s name]"> rqst.");
+
+  // This sequence will resume the ROS thread
+  pthread_mutex_lock(&self->control.bip_proxi);
+  self->control.bip_proxi_idle = true;
+  pthread_cond_broadcast(&self->control.serv_bip_proxi);
+  pthread_mutex_unlock(&self->control.bip_proxi);
+
+  return;
+}
+
+<'if {[$s kind] == "activity"} {'>
+genom_activity_<"$comp">_<"[$s name]">_ptr BIP_cast_activity_in_<"$comp">_<"[$s name]">_activity(int rqid)
+{
+  // This is really to grap the activity structure to be passed in the
+  // BIP model.  We get it from the control structure because we have
+  // stored it here, and we know there is only one rqst being handled
+  // at once.
+  genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+
+  assert (rqid == self->control.current_rqst_type);
+  genom_activity_<"$comp">_<"[$s name]">_ptr a = self->control.current_activity;
+  
+  return a;
+}
+<'}'>
+
+<'}'>
+
+void BIP_<"$comp">_send_ir(int rqid)
+{
+  // send-ir is called when the whole "control" phase of the activity has gone thru successfully...
+  // Nothing to do really... just restarting the control task... no?
+
+  genom_<"$comp">_component_data *self = <"$comp">_genom_component;
+
+  assert (rqid == self->control.current_rqst_type);
+  
+  genom_<"$comp">_log_info("BIP IR for <"$comp"> %d rqst", rqid);
+
+  // This sequence will resume the ROS thread
+  pthread_mutex_lock(&self->control.bip_proxi);
+  self->control.bip_proxi_idle = true;
+  pthread_cond_broadcast(&self->control.serv_bip_proxi);
+  pthread_mutex_unlock(&self->control.bip_proxi);
+
+  return; 
+}
+
 
 /*eof*/

@@ -37,7 +37,7 @@ lang c
 /* --- genom_abort_activity_codel ------------------------------------------ */
 
 genom_event
-genom_abort_activity_codel(uint32_t activity, genom_context ctx)
+genom_<"$comp">_abort_activity_codel(uint32_t activity, genom_context ctx)
 {
 <'foreach t [$component tasks] {'>
   /* task <"[$t name]"> */
@@ -70,7 +70,7 @@ genom_abort_activity_codel(uint32_t activity, genom_context ctx)
 /* it will be much easier to connect all ports before starting the engine...*/
 
 genom_event
-genom_connect_port_codel(const char local[128], const char remote[128],
+genom_<"$comp">_connect_port_codel(const char local[128], const char remote[128],
                          genom_context ctx)
 {
   struct genom_component_data *self = ctx->data->self;
@@ -103,7 +103,7 @@ done:
 /* --- genom_connect_remote_codel ------------------------------------------ */
 
 genom_event
-genom_connect_remote_codel(const char local[128], const char remote[128],
+genom_<"$comp">_connect_remote_codel(const char local[128], const char remote[128],
                            genom_context ctx)
 {
   struct genom_component_data *self = ctx->data->self;
@@ -130,7 +130,7 @@ done:
 
 genom_event			/* This has probably no meaning in the BIPE context. */
 				/* indeed */
-genom_kill_codel(genom_context self)
+genom_<"$comp">_kill_codel(genom_context self)
 {
   kill(getpid(), SIGTERM);
   return genom_ok;
@@ -150,12 +150,12 @@ genom_<"$comp">_<"[$s name]">_validatecb(
   /* check allowance (before/after statements) */
   /* I believe this should be done by the BIP Model.. */
 <'  foreach other [$s after] {'>
-  if (!self->run_map[<"$COMP">_<"[$other name]">_RQSTID])
-    return genom_disallowed(self);
+  if (!self->control.run_map[<"$COMP">_<"[$other name]">_RQSTID])
+    return genom_disallowed(&self->control.context);
 <'  }'>
 <'  foreach other [$s before] {'>
-  if (self->run_map[<"$COMP">_<"[$other name]">_RQSTID])
-    return genom_disallowed(self);
+  if (self->control.run_map[<"$COMP">_<"[$other name]">_RQSTID])
+    return genom_disallowed(&self->control.context);
 <'  }'>
 
   /* copy inout parameters to output */
@@ -194,7 +194,7 @@ genom_<"$comp">_<"[$s name]">_validatecb(
 '>
   s = <"[$validate invoke $plist]">;
 
-  genom_log_debug("service <"[$s name]"> validation returned %s", s?s:"ok");
+  genom_<"$comp">_log_debug("service <"[$s name]"> validation returned %s", s?s:"ok");
 <'  }'>
   return s; 
 }
@@ -254,9 +254,26 @@ genom_<"$comp">_<"[$s name]">_controlcb(
     }
     lappend plist &self->control.context
 '>
-  s = <"[$c invoke $plist]">;
 
-  genom_log_debug("service %s codel %s returned %s",
+<' switch -- [$s name] {
+   connect_service {'>
+   s = genom_<"$comp">_connect_remote_codel(a->in.local, a->in.remote, &self->control.context);
+<' }
+   abort_activity {'>
+   s = genom_<"$comp">_abort_activity_codel(a->in.activity, &self->control.context);
+<' }
+    connect_port {'>
+   s = genom_<"$comp">_connect_port_codel(a->in.local, a->in.remote, &self->control.context);
+<' } 
+   kill { '>
+   s = genom_<"$comp">_kill_codel(&self->control.context);
+<' } 
+   default {'>
+   s = <"[$c invoke $plist]">;	/* normal */
+<' }
+ }'>
+
+  genom_<"$comp">_log_debug("service %s codel %s returned %s",
                   "<"[$s name]">", "<"[$c name]">", s?s:"ok");
   if (s
 <'    foreach t [$s throw] {'>
@@ -265,7 +282,7 @@ genom_<"$comp">_<"[$s name]">_controlcb(
       ) {
     genom_unkex_detail d;
     strncpy(d.what, s, sizeof(d.what)); d.what[sizeof(d.what)-1] = *"";
-    genom_log_warn(
+    genom_<"$comp">_log_warn(
       0, "unknown exception %s for codel %s in service %s",
       s, "<"[$c name]">", "<"[$s name]">");
     s = genom_unkex(&d, &self->control.context);

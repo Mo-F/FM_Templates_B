@@ -1,5 +1,5 @@
 <'
-# Copyright (c) 2011-2014 LAAS/CNRS
+# Copyright (c) 2011-2014,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Redistribution and use  in source  and binary  forms,  with or without
@@ -17,13 +17,12 @@
 #
 
 # check arguments
-if {[llength $argv] != 1} { error "expected arguments: types" }
-lassign $argv types
+if {[llength $argv] != 2} { error "expected arguments: component types" }
+lassign $argv component types
 
 lang c
 
 # compute handy shortcuts
-set component [dotgen component]
 set comp [$component name]
 set COMP [string toupper [$component name]]
 '>
@@ -117,12 +116,35 @@ namespace ros {
           stream.next((uint32_t)0);
         }
 <'    }'>
-<'    struct - union - exception {'>
+<'    struct - exception {'>
 
 <'      foreach m [$type members] {'>
         stream.next(a.<"[$m name]">);
 <'      }'>
 
+<'    }'>
+<'    union {'>
+        stream.next(a._d);
+        switch(a._d) {
+<'      foreach e [$type members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+          case <"[language::cname $v]">:
+<'          } else {'>
+          default:
+<'          }'>
+<'        }'>
+<'        foreach a [$type members] {'>
+<'          if {$a == $e} {'>
+            stream.next((uint32_t)1);
+            stream.next(a._u.<"[$e name]">);
+<'          } else {'>
+            stream.next((uint32_t)0);
+<'          }'>
+<'        }'>
+            break;
+<'      }'>
+        }
 <'    }'>
 <'    default {'>
         stream.next(a);
@@ -177,11 +199,40 @@ namespace ros {
           for(uint32_t i = 1; i < p; i++) stream.next(x);
         }
 <'    }'>
-<'    struct - union - exception {'>
+<'    struct - exception {'>
 
 <'      foreach m [$type members] {'>
         stream.next(a.<"[$m name]">);
 <'      }'>
+
+<'    }'>
+<'    union {'>
+        uint32_t p;
+        stream.next(a._d);
+        switch(a._d) {
+<'      foreach e [$type members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+          case <"[language::cname $v]">:
+<'          } else {'>
+          default:
+<'          }'>
+<'        }'>
+<'        foreach a [$type members] {'>
+            stream.next(p);
+            if (p) {
+<'          if {$a == $e} {'>
+              stream.next(a._u.<"[$e name]">);
+              p--;
+<'          }'>
+              /* discard extraneous elements (buggy client) */
+              <"[[$a type] declarator x]">;
+              for(uint32_t i = 0; i < p; i++) stream.next(x);
+            }
+<'        }'>
+            break;
+<'      }'>
+        }
 
 <'    }'>
 <'    default {'>
@@ -218,12 +269,38 @@ namespace ros {
         return 4 + (a._present ? serializationLength(a._value) : 0);
 <'      }'>
 <'    }'>
-<'    struct - union - exception {'>
+<'    struct - exception {'>
 
         uint32_t s = 0;
 <'      foreach m [$type members] {'>
         s += serializationLength(a.<"[$m name]">);
 <'      }'>
+        return s;
+
+<'    }'>
+<'    default {'>
+        return serializationLength(a);
+<'    }'>
+<'    union {'>
+
+        uint32_t s = serializationLength(a._d);
+<'      foreach e [$type members] {'>
+        s += 4;
+<'      }'>
+        switch(a._d) {
+<'      foreach e [$type members] {'>
+<'        foreach v [$e value] {'>
+<'          if {$v != ""} {'>
+          case <"[language::cname $v]">:
+<'          } else {'>
+          default:
+<'          }'>
+<'        }'>
+            s += serializationLength(a._u.<"[$e name]">);
+            break;
+<'      }'>
+        }
+
         return s;
 
 <'    }'>

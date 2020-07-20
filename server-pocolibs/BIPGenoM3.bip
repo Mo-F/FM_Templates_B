@@ -121,7 +121,7 @@ foreach component [dotgen components] {
 	lappend instpertask [expr [llength [$t services]]*$max]}
 
     foreach s [$component services] {
-	if {[$s name]!="abort_activity" && [$s name]!="kill" && [$s name]!="connect_service"} {
+	if {[$s name]!="abort_activity" && [$s name]!="connect_service"} {
 	    lappend requests $s
 	    if {[$s kind] == "activity"} {lappend activities $s
 	    } else {lappend nonactivities $s}
@@ -373,7 +373,7 @@ foreach component [dotgen component] {
     set activities [list]
     set nonactivities [list]
     foreach s [$component services] {
-	if {[$s name]!="abort_activity" && [$s name]!="kill" && [$s name]!="connect_service"} {
+	if {[$s name]!="abort_activity" && [$s name]!="connect_service"} {
 	    lappend requests $s
 	    if {[$s kind] == "activity"} {lappend activities $s
 	    } else {lappend nonactivities $s}
@@ -751,8 +751,10 @@ atom type TIMER_<"[$t name]">_<"$comp">()
 
 	on tick
 	from loop to loop
-	provided (c >= <"[expr [[$t period] value]*$slowdown*1000]">)
+	
+	// provided (c >= <"[expr [[$t period] value]*$slowdown*1000]">)
 	do { c = 0; }
+	resume (c <= <"[expr [[$t period] value]*$slowdown*1000]">)
 
 //	invariant inv at loop provided (c <= <"[expr [[$t period] value]*$slowdown*1000]">)
 end
@@ -927,12 +929,15 @@ foreach n $nostop {'>
 	export port Port inter_1_<"$n">_2()
 	export port Port inter_2_<"$n">_2()<'}'>
 	
-	place idle, <'
+	place <'if {![catch {$t period}]} {'>idle, <'}
 if {[llength [$t codels]]} {'>start_perm, end_perm, <'}
 foreach s [$t services] {'>start_<"[$s name]">_1, end_<"[$s name]">_1, start_<"[$s name]">_2, end_<"[$s name]">_2, <'}
 foreach n $nostop {'>interrupt_<"$n">_1, interrupt_<"$n">_2, <'}'>finish
 	
-	initial to idle
+	initial to <'if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
 	
 <'if {![catch {$t period}]} {'>
 	on tick
@@ -954,13 +959,17 @@ if {[llength [$t codels]]} {'>
 	on cycle_perm
 	from end_perm to <'
 	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
-	} else {'>idle<'}'>
+	} else {
+		if {![catch {$t period}]} {'>idle<'
+				} else {'>start_perm<'}}'>
 	//resume
 	
 	on skip_perm
 	from start_perm to <'
 	if {[llength [$t services]]} {'>start_<"[[lindex [$t services] 0] name]">_1<'
-	} else {'>idle<'}'>
+	} else {
+		if {![catch {$t period}]} {'>idle<'
+				} else {'>start_perm<'}}'>
 	//eager
 	//resume
 	
@@ -1039,13 +1048,23 @@ foreach n $nostop {'>
 if {[llength [$t services]]} {'>
 	
 	on skipall
-	from start_<"[[lindex [$t services] 0] name]">_1 to idle
+	from start_<"[[lindex [$t services] 0] name]">_1 to <'
+	if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
+	
 	//eager
 	//resume
 <'}'>
 
 	on ended
-	from finish to idle
+	from finish to <'
+	if {![catch {$t period}]} {'>idle<'
+	} else {
+		if {[llength [$t codels]]} {'>start_perm<'
+		} else {'>start_<"[[lindex [$t services] 0] name]">_1<'}}'>
+	
 	//eager
 	//resume
 	
@@ -1278,13 +1297,10 @@ foreach t [$component tasks] {'>
 	
 	component SERVICE_<"[$s name]">_<"$comp"> <"[$s name]">_<"$comp">_inst_1(), <"[$s name]">_<"$comp">_inst_2()<'}}'>
 
-<'if {[llength $activities]} {'>
-
+<'if {[llength $activities]} {'> 	
 	component STATUS <'
 foreach a $activities {'><"[$a name]">_<"$comp">_status_1(), <"[$a name]">_<"$comp">_status_2()<'
-    if {$a != [lindex $activities end]} {'>, <'}}
-
-}
+    if {$a != [lindex $activities end]} {'>, <'}}}
 		
 set mutex($gcounter) [list]
 foreach r $requests {
@@ -1568,10 +1584,12 @@ foreach i [$a interrupts] {
 	
 connector singleton_exp request_<"[$n name]">_<"$comp">(control_<"$comp">.req_<"[$n name]">)
 	
-<'    if {[llength [$n interrupts]]} {'>
-	
-connector trig<"[expr [llength [$n interrupts]]*2+1]"> inter_inc_<"[$n name]">_<"$comp">(control_<"$comp">.inter_<"[$n name]"><'
-	foreach i [$n interrupts] {'>, <"[$i name]">_<"$comp">_status_1.interrupt, <"[$i name]">_<"$comp">_status_2.interrupt<'}'>)<'}}
+<'    if {[llength [$n interrupts]]} {
+set intnew [list]
+foreach i [$n interrupts] {
+if {[$i kind] == "activity"} {lappend intnew $i}}'>	
+connector trig<"[expr [llength $intnew]*2+1]"> inter_inc_<"[$n name]">_<"$comp">(control_<"$comp">.inter_<"[$n name]"><'
+	foreach i $intnew {'>, <"[$i name]">_<"$comp">_status_1.interrupt, <"[$i name]">_<"$comp">_status_2.interrupt<'}'>)<'}}
 
 if {[llength $mutex($gcounter)]} {'>
 	

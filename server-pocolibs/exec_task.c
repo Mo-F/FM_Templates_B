@@ -47,7 +47,7 @@ genom_<"$comp">_<"$tname">_exec_task_init(void *data)
 {
   struct genom_component_data *self = data;
   /* init */
-  genom_log_info("Inited task <"[$task name]">");
+  genom_<"$comp">_log_info("Inited task <"[$task name]">");
 
 }
 

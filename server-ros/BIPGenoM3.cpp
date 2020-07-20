@@ -25,33 +25,8 @@ set comp [$component name]
 lang c
 '>
 #include "<"$comp">_BIPGenoM3.hpp"
-
-/* BIP bool functions to test if an activity is of a specific RQSTID.  */
-<'foreach s [$component services] {'>
-bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const genom_activity_ptr a)
-{
-  return (c_BIP_<"$COMP">_<"[$s name]">_RQSTID_p(a) == 1);
-}
-
-<'}'>
-
-
-/* BIP bool functions to test if a particular genom_event is of a specific type.  */
-bool BIP_genom_ok_p(const genom_event e)
-{
-  return (c_BIP_genom_ok_p(e) == 1);
-}
-
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-bool BIP_<"[$e cname]">_p(const genom_event e)
-{
-  return (c_BIP_<"[$e cname]">_p(e) == 1);
-}
-
-<'}'>
-<'}'>
-
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
+#include <stdio.h>
 
 <"$comp">BIPExternalPort::<"$comp">BIPExternalPort(const string &name, const EventConsumptionPolicy &policy) :
   AtomExternalPort(name, policy),
@@ -103,10 +78,12 @@ TimeValue <"$comp">BIPExternalPort::eventTime() const {
   return ret;
 }
 
-genom_activity_ptr <"$comp">BIPExternalPort::event_get_activity() {
+int <"$comp">BIPExternalPort::event_get_activity() {
   pthread_mutex_lock(&mutex);
 
-  genom_activity_ptr ret = rqst[readIndex];
+  int ret = rqst[readIndex];
+
+  fprintf(stderr,"<"$comp">BIPExternalPort::event_get_activity getting %d.\n", ret);
 
   pthread_mutex_unlock(&mutex);
 
@@ -126,11 +103,14 @@ void *<"$comp">BIPExternalPort::spinning(void *arg) { // why do not you use this
   // mechanisms)
   sigprocmask(SIG_BLOCK, &mask, NULL);
 
+  int i = syscall(SYS_gettid);
+  cout << "External port thread callback tid = " << i << endl; 
+
   <"$comp">BIPExternalPort *port = (<"$comp">BIPExternalPort *) arg; // why the arg? not self?
 
   //  We need to pass a structure which also containts the genom_self component...
 
-  while (! BIP_<"$comp">_init_mbox());
+  while (! BIP_<"$comp">_init_mbox()); // in ROS, this is a no-op.
 
   while (true) {
 
@@ -141,7 +121,7 @@ void *<"$comp">BIPExternalPort::spinning(void *arg) { // why do not you use this
   return NULL;
 }
 
-void <"$comp">BIPExternalPort::push(genom_activity_ptr a) {
+void <"$comp">BIPExternalPort::push(int a) {
   // current value of the Engine real-time clock
   TimeValue currentTime = time();
 
@@ -157,12 +137,25 @@ void <"$comp">BIPExternalPort::push(genom_activity_ptr a) {
   notify();
 }
 
-extern "C" 
-void call_<"$comp">BIPExternalPort_push(void* arg, genom_activity_ptr a) // wrapper function to call the push from C code.
+#include <stdio.h>
+
+void call_<"$comp">BIPExternalPort_push(void* arg, int a) // wrapper function to call the push from C code.
 {
   <"$comp">BIPExternalPort *port = (<"$comp">BIPExternalPort *) arg; // why the arg? not self?
+  fprintf(stderr,"call_<"$comp">BIPExternalPort_push pushing %d.\n", a);
   
   return port->push(a);
 }
 
 /* eof */
+
+
+
+
+
+
+
+
+
+
+

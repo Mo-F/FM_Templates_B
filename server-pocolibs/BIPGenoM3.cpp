@@ -25,6 +25,7 @@ set comp [$component name]
 lang c
 '>
 #include "<"$comp">_BIPGenoM3.hpp"
+#include "global_functions.hpp"
 #include <sys/syscall.h>   /* For SYS_xxx definitions */
 
 
@@ -39,23 +40,6 @@ bool BIP_<"$COMP">_<"[$s name]">_RQSTID_p(const genom_activity_ptr a)
   return (c_BIP_<"$COMP">_<"[$s name]">_RQSTID_p(a) == 1);
 }
 
-<'}'>
-
-
-/* BIP bool functions to test if a particular genom_event is of a specific type.  */
-bool BIP_genom_ok_p(const genom_event e)
-{
-  return (c_BIP_genom_ok_p(e) == 1);
-}
-
-<'foreach e [dotgen types] {'>
-<'  if {([$e kind] == "exception") || ([$e kind] == "event") || ([$e kind] == "pause event")} {'>
-bool BIP_<"[$e cname]">_p(const genom_event e)
-{
-  return (c_BIP_<"[$e cname]">_p(e) == 1);
-}
-
-<'}'>
 <'}'>
 
 

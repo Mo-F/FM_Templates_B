@@ -28,7 +28,10 @@
 #
 # 					Anthony Mallet on Wed Feb  3 2010
 
-set component [dotgen component]
+
+if {[llength $argv] != 1} { error "expected arguments: component" }
+lassign $argv component
+
 lang c
 '>
 

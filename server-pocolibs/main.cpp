@@ -31,7 +31,13 @@ lang c++
 
 
 extern "C" {
-void BIP_<"$comp">_init_genom(void); // This should be in an include for consistency checking...
+
+// These should be in include files for consistency checking...
+<'foreach c [dotgen components] {
+set comp [$c name]'>
+void BIP_<"$comp">_init_genom(void); 
+<'}'>
+void BIP_init_h2(void);
 long taskFromThread(const char *name);
 }
 
@@ -41,15 +47,21 @@ int main(int argc, char **argv) {
     int ret = EXIT_SUCCESS;
 
     class MyBipCallBack1 : public BipCallBack {      
-      virtual void callBackMethod() { 
+      virtual void callBackMethod(int argc, char **argv) { 
 	cout << "init call back!" << endl; 
+	
+	BIP_init_h2();
+
+<'foreach c [dotgen components] {
+set comp [$c name]'>
 	BIP_<"$comp">_init_genom();
+<'}'>
 
       }
     };
       
     class MyBipCallBack2 : public BipCallBack {
-      virtual void callBackMethod() {
+      virtual void callBackMethod(int argc, char **argv) {
 	int i = syscall(SYS_gettid);
 	cout << "thread callback tid = " << i << endl; 
 	taskFromThread(NULL);

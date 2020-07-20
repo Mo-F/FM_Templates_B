@@ -147,7 +147,7 @@ genom_<"$comp">_<"[$p name]">_close(const char *id, genom_context self)
 /* --- state port ---------------------------------------------------------- */
 
 int
-genom_component_data::genom_state_init(void)
+genom_<"$comp">_component_data::genom_state_init(void)
 {
   genom_state_component *data;
 
@@ -172,7 +172,7 @@ genom_component_data::genom_state_init(void)
     task->rusage.load.avg = 0;
     task->activity._length = 0;
     if (genom_sequence_reserve(&task->activity,
-                               genom_activities::MAX_ACTIVITIES))
+                               genom_<"$comp">_activities::MAX_ACTIVITIES))
       return ENOMEM;
   }
 <'}'>
@@ -188,23 +188,23 @@ genom_component_data::genom_state_init(void)
 
   ports.genom_state_.handle.write(&control.context);
 
-  genom_log_info("initialized outport genom_state");
+  genom_<"$comp">_log_info("initialized outport genom_state");
   return 0;
 }
 
 int
-genom_component_data::genom_state_update(struct genom_exec_task *task)
+genom_<"$comp">_component_data::genom_state_update(struct genom_<"$comp">_exec_task *task)
 {
   genom_state_component *data;
   genom_state_task *t;
-  genom_activity *a;
+  genom_<"$comp">_activity *a;
   const char *s;
   size_t i, j;
 
   data = ports.genom_state_.handle.data(&control.context);
   t = &data->task._buffer[task->num];
 
-  for(i = j = 0; i < genom_activities::MAX_ACTIVITIES; i++) {
+  for(i = j = 0; i < genom_<"$comp">_activities::MAX_ACTIVITIES; i++) {
     a = task->activities.a[i];
     if (!a) continue;
     if (a->status == ACT_VOID) continue;
@@ -227,7 +227,7 @@ genom_component_data::genom_state_update(struct genom_exec_task *task)
 }
 
 int
-genom_component_data::genom_state_refresh()
+genom_<"$comp">_component_data::genom_state_refresh()
 {
 <'if {[llength [$component tasks]]} {'>
   genom_state_component *data;
@@ -239,9 +239,9 @@ genom_component_data::genom_state_refresh()
   /* task rusage */
 <'foreach t [$component tasks] {'>
   task = &data->task._buffer[<"${comp}_[$t name]_TASKID">];
-  pthread_spin_lock(&tasks.<"[$t name]">_.rlock);
+  //  pthread_spin_lock(&tasks.<"[$t name]">_.rlock);
   task->rusage = tasks.<"[$t name]">_.rusage;
-  pthread_spin_unlock(&tasks.<"[$t name]">_.rlock);
+  //  pthread_spin_unlock(&tasks.<"[$t name]">_.rlock);
 <'}'>
 
 <'if {[llength [$component tasks]]} {'>

@@ -1,5 +1,5 @@
 <'
-# Copyright (c) 2012-2015 LAAS/CNRS
+# Copyright (c) 2012-2015,2017 LAAS/CNRS
 # All rights reserved.
 #
 # Redistribution and use  in source  and binary  forms,  with or without
@@ -17,13 +17,16 @@
 #
 
 # check arguments
-if {[llength $argv] != 1} { error "expected arguments: types" }
-lassign $argv types
+if {[llength $argv] != 2} { error "expected arguments: component types" }
+lassign $argv component types
+
+#puts stderr [$component name]
+#puts stderr $types
 
 lang c
 
 # compute handy shortcuts
-set component [dotgen component]
+#set component [dotgen component]
 set comp [$component name]
 set COMP [string toupper [$component name]]
 '>
@@ -41,7 +44,7 @@ set COMP [string toupper [$component name]]
 namespace genom {
   namespace ids {
     /* init */
-    template<typename T> inline void pinit(T &p) { }
+    template<typename T> inline void pinit(T &) { }
 
     template<typename T, std::size_t size> inline void pinit(T (&p)[size]) {
       for(std::size_t i = 0; i<size; i++) pinit(p[i]);
@@ -65,7 +68,7 @@ namespace genom {
 
 
     /* fini */
-    template<typename T> inline void pfini(T &p) { }
+    template<typename T> inline void pfini(T &) { }
 
     template<typename T, std::size_t size> inline void pfini(T (&p)[size]) {
       for(std::size_t i = 0; i<size; i++) pfini(p[i]);
@@ -242,23 +245,69 @@ namespace genom {
   namespace ids {
     template<> inline void
       pinit< <"[$type declarator]"> >(<"[$type declarator &p]">) {
-<'  foreach m [$type members] {'>
+<'  if {[$type kind] == "union"} {'>
+<'    foreach first [$type members] {'>
+<'      foreach v [$first value] { if {$v != ""} break }'>
+<'      if {$v != ""} break'>
+<'    }'>
+      pinit(p._d);
+<'    if {$v != ""} {'>
+      p._d = <"[language::cname $v]">;
+<'    }'>
+      pinit(p._u.<"[$first name]">);
+<'  } else {'>
+<'    foreach m [$type members] {'>
       pinit(p.<"[$m name]">);
+<'    }'>
 <'  }'>
     }
 
     template<> inline void
       pfini< <"[$type declarator]"> >(<"[$type declarator &p]">) {
-<'  foreach m [$type members] {'>
+<'  if {[$type kind] == "union"} {'>
+      switch(p._d) {
+<'    foreach e [$type members] {'>
+<'      foreach v [$e value] {'>
+<'        if {$v != ""} {'>
+        case <"[language::cname $v]">:
+<'        } else {'>
+        default:
+<'        }'>
+<'      }'>
+          pfini(p._u.<"[$e name]">);
+          break;
+<'      }'>
+      }
+      pfini(p._d);
+<'  } else {'>
+<'    foreach m [$type members] {'>
       pfini(p.<"[$m name]">);
+<'    }'>
 <'  }'>
     }
 
     template<> inline void
       pcopy< <"[$type declarator]"> >(<"[$type declarator &dst]">,
               const <"[$type declarator &src]">) {
-<'  foreach m [$type members] {'>
+<'  if {[$type kind] == "union"} {'>
+      pcopy(dst._d, src._d);
+      switch(src._d) {
+<'    foreach e [$type members] {'>
+<'      foreach v [$e value] {'>
+<'        if {$v != ""} {'>
+        case <"[language::cname $v]">:
+<'        } else {'>
+        default:
+<'        }'>
+<'      }'>
+          pcopy(dst._u.<"[$e name]">, src._u.<"[$e name]">);
+          break;
+<'      }'>
+      }
+<'  } else {'>
+<'    foreach m [$type members] {'>
       pcopy(dst.<"[$m name]">, src.<"[$m name]">);
+<'    }'>
 <'  }'>
     }
   };
